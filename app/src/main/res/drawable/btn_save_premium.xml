@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Тень -->
+    <item>
+        <shape>
+            <solid android:color="@color/accent_orange" />
+            <corners android:radius="25dp" />
+        </shape>
+    </item>
+    <!-- Градиентная заливка -->
+    <item android:top="2dp" android:bottom="2dp">
+        <shape>
+            <gradient
+                android:startColor="@color/accent_gold"
+                android:endColor="@color/accent_orange"
+                android:angle="45" />
+            <corners android:radius="25dp" />
+        </shape>
+    </item>
+</layer-list>

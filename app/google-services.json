@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "346031385279",
+    "project_id": "oz-trip",
+    "storage_bucket": "oz-trip.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:346031385279:android:26646136a622fe1883b40a",
+        "android_client_info": {
+          "package_name": "com.example.oztrip"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxP_MCe2w73-9zpty120nvfROQleb-wKY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

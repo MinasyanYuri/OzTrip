@@ -1,0 +1,618 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+
+    xmlns:android="http://schemas.android.com/apk/res/android"
+
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+
+    android:layout_width="match_parent"
+
+    android:layout_height="match_parent"
+
+    android:background="@drawable/bg_orange_glass"
+
+    android:clipChildren="false"
+
+    android:clipToPadding="false">
+
+
+
+    <org.maplibre.android.maps.MapView
+
+        android:id="@+id/mapView"
+
+        android:layout_width="match_parent"
+
+        android:layout_height="match_parent"
+
+        app:maplibre_renderTextureMode="true" />
+
+    <com.google.android.material.card.MaterialCardView
+
+        android:id="@+id/btnSaveLocation"
+
+        android:layout_width="wrap_content"
+
+        android:layout_height="50dp"
+
+        android:layout_gravity="bottom|center_horizontal"
+
+        android:layout_marginBottom="100dp"
+
+        app:cardCornerRadius="25dp"
+
+        app:cardElevation="20dp"
+
+        app:cardBackgroundColor="#FF9800"
+
+        app:strokeColor="#FFFFFF"
+
+        app:strokeWidth="2dp"
+
+        android:translationZ="15dp">
+
+        <LinearLayout
+
+            android:layout_width="wrap_content"
+
+            android:layout_height="match_parent"
+
+            android:paddingHorizontal="24dp"
+
+            android:gravity="center">
+
+            <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@android:drawable/ic_input_add" app:tint="#FFFFFF" />
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Сохранить" android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp"
+        android:gravity="center_vertical"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="12dp"
+        android:layout_gravity="top"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+
+        <ImageView
+            android:id="@+id/btnSearch"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_search_premium"
+            android:background="@drawable/bg_icon_glass"
+            android:padding="10dp"
+            />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            app:cardCornerRadius="30dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@android:color/transparent"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvTravelLists"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                android:paddingVertical="8dp"
+                android:clipToPadding="false" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/bg_icon_glass"
+            android:paddingHorizontal="4dp">
+
+            <ImageView
+                android:id="@+id/btnAddList"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_add_premium"
+                app:tint="#FFFFFF"
+                android:padding="8dp" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="24dp"
+                android:background="#80FFFFFF" />
+
+            <ImageView
+                android:id="@+id/btnSettings"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_settings_luxury"
+                app:tint="#FFFFFF"
+                android:padding="8dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+
+
+
+
+
+
+    <ImageView
+
+        android:id="@+id/centerMarker"
+
+        android:layout_width="80dp"
+
+        android:layout_height="80dp"
+
+        android:layout_gravity="center"
+
+        android:src="@drawable/ic_luxury_marker_center"
+
+        android:translationY="-2dp"
+
+        android:elevation="12dp"
+
+        android:visibility="visible" />
+
+    <LinearLayout
+
+        android:layout_width="wrap_content"
+
+        android:layout_height="wrap_content"
+
+        android:layout_gravity="top|end"
+
+        android:layout_marginTop="100dp"
+
+        android:layout_marginEnd="24dp"
+
+        android:orientation="vertical"
+
+        android:elevation="15dp">
+
+
+
+        <ImageView
+
+            android:id="@+id/fabCompass"
+
+            android:layout_width="44dp"
+
+            android:layout_height="44dp"
+
+            android:layout_marginBottom="14dp"
+
+            android:layout_gravity="center_horizontal"
+
+
+
+            android:background="@drawable/bg_compass_luxury"
+
+            android:src="@drawable/ic_luxury_compass"
+
+            android:scaleType="center"
+
+
+
+            android:elevation="6dp"
+
+            android:outlineAmbientShadowColor="#FF9800"
+
+            android:outlineSpotShadowColor="#FF9800"
+
+
+
+            android:clickable="true"
+
+            android:focusable="true"
+
+            android:foreground="?android:attr/selectableItemBackgroundBorderless" />
+
+        <ImageView
+
+            android:id="@+id/fabToggleMarker"
+
+            android:layout_width="44dp"
+
+            android:layout_height="44dp"
+
+            android:layout_marginBottom="12dp"
+
+            android:layout_gravity="center_horizontal"
+
+            android:background="@drawable/bg_btn_luxury_toggle"
+
+            android:src="@drawable/ic_btn_toggle_marker"
+
+            android:scaleType="centerInside"
+
+            android:padding="10dp"
+
+            android:elevation="8dp"
+
+            android:clickable="true"
+
+            android:focusable="true"
+
+            android:foreground="?android:attr/selectableItemBackgroundBorderless" />
+
+
+
+        <ImageView
+
+            android:id="@+id/fabTarget"
+
+            android:layout_width="44dp"
+
+            android:layout_height="44dp"
+
+            android:layout_marginBottom="12dp"
+
+            android:layout_gravity="center_horizontal"
+
+
+
+            android:background="@drawable/bg_btn_target_luxury"
+
+            android:src="@drawable/ic_target_luxury"
+
+            android:scaleType="centerInside"
+
+            android:padding="10dp"
+
+
+
+            android:elevation="10dp"
+
+            android:clickable="true"
+
+            android:focusable="true"
+
+            android:foreground="?android:attr/selectableItemBackgroundBorderless" />
+
+
+
+        <ImageView
+
+            android:id="@+id/fabAction"
+
+            android:layout_width="44dp"
+
+            android:layout_height="44dp"
+
+            android:layout_gravity="center_horizontal"
+
+
+
+            android:background="@drawable/bg_btn_action_luxury"
+
+            android:src="@drawable/ic_mylocation_luxury"
+
+            android:scaleType="centerInside"
+
+            android:padding="11dp"
+
+
+
+            android:elevation="6dp"
+
+            android:clickable="true"
+
+            android:focusable="true"
+
+            android:foreground="?android:attr/selectableItemBackgroundBorderless" />
+
+
+
+
+
+    </LinearLayout>
+
+
+
+
+
+
+
+    <com.example.oztrip.LiquidSegmentedControl
+
+        android:id="@+id/liquid_nav"
+
+        android:layout_width="300dp"
+
+        android:layout_height="60dp"
+
+        android:layout_gravity="bottom|center_horizontal"
+
+        android:layout_marginBottom="25dp" />
+
+
+
+    <com.google.android.material.card.MaterialCardView
+
+        android:id="@+id/infoCard"
+
+        android:layout_width="match_parent"
+
+        android:layout_height="wrap_content"
+
+        app:cardCornerRadius="40dp"
+
+        app:cardElevation="50dp"
+
+        app:cardBackgroundColor="#E6212121"
+
+        app:strokeWidth="1.5dp"
+
+        app:strokeColor="#66FF9800"
+
+        app:behavior_hideable="true"
+
+        app:behavior_peekHeight="190dp"
+
+        android:clipChildren="false"
+
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
+
+
+
+        <RelativeLayout
+
+            android:layout_width="match_parent"
+
+            android:layout_height="wrap_content"
+
+            android:clipChildren="false">
+
+
+
+
+
+
+
+            <View
+
+                android:id="@+id/sheetHandle"
+
+                android:layout_width="50dp"
+
+                android:layout_height="5dp"
+
+                android:layout_centerHorizontal="true"
+
+                android:layout_marginTop="35dp"
+
+                android:background="#FF9800"
+
+                android:elevation="5dp" />
+
+
+
+            <LinearLayout
+
+                android:layout_width="match_parent"
+
+                android:layout_height="wrap_content"
+
+                android:orientation="vertical">
+
+
+
+                <FrameLayout
+
+                    android:layout_width="match_parent"
+
+                    android:layout_height="210dp">
+
+
+
+                    <com.google.android.material.imageview.ShapeableImageView
+
+                        android:id="@+id/infoImage"
+
+                        android:layout_width="match_parent"
+
+                        android:layout_height="match_parent"
+
+                        android:scaleType="centerCrop"
+
+                        android:src="@android:drawable/ic_menu_gallery"
+
+                        app:shapeAppearanceOverlay="@style/RoundedTopCorners" />
+
+
+
+                    <View
+
+                        android:layout_width="match_parent"
+
+                        android:layout_height="100dp"
+
+                        android:layout_gravity="bottom"
+
+                        android:background="@drawable/gradient_orange_overlay" />
+
+
+
+                    <ImageView
+
+                        android:id="@+id/btnCloseInfo"
+
+                        android:layout_width="42dp"
+
+                        android:layout_height="42dp"
+
+                        android:layout_gravity="end|top"
+
+                        android:layout_margin="18dp"
+
+                        android:background="@drawable/bg_circle_glass_orange"
+
+                        android:padding="11dp"
+
+                        android:src="@android:drawable/ic_menu_close_clear_cancel"
+
+                        app:tint="#FFFFFF" />
+
+                </FrameLayout>
+
+
+
+                <LinearLayout
+
+                    android:layout_width="match_parent"
+
+                    android:layout_height="wrap_content"
+
+                    android:padding="28dp"
+
+                    android:orientation="vertical">
+
+
+
+                    <TextView
+
+                        android:id="@+id/infoTitle"
+
+                        android:layout_width="match_parent"
+
+                        android:layout_height="wrap_content"
+
+                        android:text="Выберите место"
+
+                        android:textColor="#FFFFFF"
+
+                        android:textSize="28sp"
+
+                        android:fontFamily="sans-serif-black" />
+
+
+
+                    <TextView
+
+                        android:id="@+id/infoDescription"
+
+                        android:layout_width="match_parent"
+
+                        android:layout_height="wrap_content"
+
+                        android:layout_marginTop="5dp"
+
+                        android:text="📍 Тяните вверх для деталей"
+
+                        android:textColor="#CCFFFFFF"
+
+                        android:textSize="14sp" />
+
+
+
+                    <View
+
+                        android:layout_width="100dp"
+
+                        android:layout_height="2dp"
+
+                        android:layout_marginVertical="22dp"
+
+                        android:background="#FF9800" />
+
+
+
+                    <LinearLayout
+
+                        android:layout_width="match_parent"
+
+                        android:layout_height="wrap_content"
+
+                        android:orientation="horizontal"
+
+                        android:weightSum="3">
+
+
+
+                        <LinearLayout
+
+                            android:layout_width="0dp"
+
+                            android:layout_height="wrap_content"
+
+                            android:layout_weight="1"
+
+                            android:gravity="center"
+
+                            android:orientation="vertical">
+
+                            <TextView android:id="@+id/txtTemp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--°C" android:textColor="#FFD180" android:textSize="20sp" android:textStyle="bold" />
+
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ТЕМП." android:textColor="#80FFFFFF" android:textSize="11sp" />
+
+                        </LinearLayout>
+
+
+
+                        <LinearLayout
+
+                            android:layout_width="0dp"
+
+                            android:layout_height="wrap_content"
+
+                            android:layout_weight="1"
+
+                            android:gravity="center"
+
+                            android:orientation="vertical">
+
+                            <TextView android:id="@+id/txtHeight" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--m" android:textColor="#FFFFFF" android:textSize="20sp" android:textStyle="bold" />
+
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ВЫСОТА" android:textColor="#80FFFFFF" android:textSize="11sp" />
+
+                        </LinearLayout>
+
+
+
+                        <LinearLayout
+
+                            android:layout_width="0dp"
+
+                            android:layout_height="wrap_content"
+
+                            android:layout_weight="1"
+
+                            android:gravity="center"
+
+                            android:orientation="vertical">
+
+                            <TextView android:id="@+id/txtFlora" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="---" android:textColor="#FF9800" android:textSize="14sp" android:textStyle="bold" android:gravity="center" app:autoSizeTextType="uniform" />
+
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="КООРДИНАТЫ" android:textColor="#80FFFFFF" android:textSize="11sp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </RelativeLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
