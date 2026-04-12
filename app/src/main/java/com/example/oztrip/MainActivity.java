@@ -76,7 +76,6 @@ import android.content.Context;
 
 public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private String lastPlaceId; // Всего лишь строка типа "relation/364092"
-
     private TravelRepository travelRepository;
     private boolean isDataLoaded = false; // флаг, чтобы не дублировать загрузку
     private ArrayList<TravelList> allTravelLists = new ArrayList<>(); // Список всех веток
@@ -259,6 +258,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         try {
             MapLibre.getInstance(this);
             setContentView(R.layout.activity_main);
+
+
+
+
+// Если активность восстанавливается после поворота – не добавляем фрагменты заново
+
             setupRecyclerView();
             rvTravelLists.setFadingEdgeLength((int) dpToPx(40));
             rvTravelLists.setHorizontalFadingEdgeEnabled(true);
@@ -341,6 +346,18 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             });
             setupButtons();
 
+            LiquidSegmentedControl liquidNav = findViewById(R.id.liquid_nav);
+            if (liquidNav != null) {
+                liquidNav.setOnTabSelectedListener(index -> {
+                    if (index == 0) {
+                        findViewById(R.id.mapContainer).setVisibility(View.VISIBLE);
+                        findViewById(R.id.aiContainer).setVisibility(View.GONE);
+                    } else {
+                        findViewById(R.id.mapContainer).setVisibility(View.GONE);
+                        findViewById(R.id.aiContainer).setVisibility(View.VISIBLE);
+                    }
+                });
+            }
             if (mapView != null) {
                 mapView.getMapAsync(map -> {
                     this.mapLibre = map;
@@ -351,20 +368,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     }
                     String styleUrl = "https://tiles.openfreemap.org/styles/liberty";
                     map.setStyle(styleUrl, style -> {
-                        // 1. Стандартные настройки UI
+                        // Скрываем UI элементы
                         map.getUiSettings().setCompassEnabled(false);
                         map.getUiSettings().setAttributionEnabled(false);
+                        map.getUiSettings().setLogoEnabled(false); // <-- ЭТО КЛЮЧЕВОЙ МЕТОД
 
-                        // 2. Полет в Ереван только при первом запуске
+                        // Полет в Ереван только при первом запуске
                         if (map.getCameraPosition().zoom < 3) {
                             map.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(40.1792, 44.5134), 12), 2000);
                         }
                         refreshSavedPoints();
-                        // 3. ВКЛЮЧАЕМ ЛОКАЦИЮ
                         enableLocation(style);
-
-                        // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-                        // 4. Восстанавливаем всё, что исчезло
                         restoreMyData(style);
                     });
                     mapLibre.setOnMarkerClickListener(marker -> {
@@ -521,6 +535,30 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         } catch (Exception e) {
             // Если что-то пойдет совсем не так, мы увидим текст ошибки вместо простого вылета
             Toast.makeText(this, "Критическая ошибка: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+
+
+    public List<SavedLocation> getUniqueLocations() {
+        return uniqueLocations;
+    }
+
+    public List<LatLng> getPathPoints() {
+        return pathPoints;
+    }
+
+    private String loadStyleFromAssets() {
+        try {
+            InputStream is = getAssets().open("style.json");
+            int size = is.available();
+            byte[] buffer = new byte[size];
+            is.read(buffer);
+            is.close();
+            return new String(buffer, "UTF-8");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
     }
     private void loadTravelDataFromCloud() {
@@ -2031,6 +2069,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pathPoints = currentActiveList.pathPoints;
         uniqueLocations = currentActiveList.locations;
     }
+
+
 
     @Override protected void onStart() { super.onStart(); if (mapView != null) mapView.onStart(); }
 
