@@ -74,7 +74,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
 
-
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
 // Нативный SDK от MapTiler (включает встроенные функции поиска)
     // Используем открытый MapLibre (он скачается 100% без паролей)

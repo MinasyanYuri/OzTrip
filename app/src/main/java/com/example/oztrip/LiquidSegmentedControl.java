@@ -18,7 +18,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LiquidSegmentedControl extends View {
-
+    private float bgWidth;   // ширина видимого фона (300dp)
+    private float bgLeft;    // отступ слева для центрирования
     private Paint bgPaint, sliderPaint, textPaint, strokePaint;
     private RectF bgRect, sliderRect;
     private List<String> tabs = new ArrayList<>();
@@ -30,7 +31,12 @@ public class LiquidSegmentedControl extends View {
     public interface OnTabSelectedListener {
         void onTabSelected(int index);
     }
-
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        bgWidth = dpToPx(300);
+        bgLeft = (w - bgWidth) / 2f;
+    }
     public LiquidSegmentedControl(Context context, AttributeSet attrs) {
         super(context, attrs);
         init();
@@ -74,36 +80,33 @@ public class LiquidSegmentedControl extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        float w = getWidth();
         float h = getHeight();
+
+        // Сдвигаем рисование на bgLeft, чтобы фон был по центру
+        canvas.save();
+        canvas.translate(bgLeft, 0);
+
+        float w = bgWidth;      // работаем с шириной фона
         float r = h / 2f;
 
-        // --- 1. Рисуем фон стекла ---
+        // --- 1. Рисуем фон стекла (только внутри 300dp) ---
         bgRect.set(0, 0, w, h);
-
-        // Добавим блик градиентом
         LinearGradient glassShader = new LinearGradient(0, 0, 0, h,
                 new int[]{Color.parseColor("#E6FFFFFF"), Color.parseColor("#B3FFFFFF")},
                 null, Shader.TileMode.CLAMP);
         bgPaint.setShader(glassShader);
-
         canvas.drawRoundRect(bgRect, r, r, bgPaint);
-        canvas.drawRoundRect(bgRect, r, r, strokePaint); // Грань
+        canvas.drawRoundRect(bgRect, r, r, strokePaint);
 
-        // --- 2. Рисуем активный ползунок "Жидкая капля" ---
+        // --- 2. Рисуем активный ползунок ---
         float tabWidth = w / tabs.size();
-        float sliderPadding = dpToPx(6);
+        float sliderPadding = dpToPx(6f);   // используем float-версию dpToPx
 
-        // Расчет позиции ползунка с учетом анимации
         float sliderLeft = sliderPadding + (sliderPosition * tabWidth);
         float sliderRight = (sliderPadding + tabWidth) + (sliderPosition * tabWidth) - (sliderPadding * 2);
-
         sliderRect.set(sliderLeft, sliderPadding, sliderRight, h - sliderPadding);
 
-        // "Эффект Liquid": слегка сжимаем ползунок в центре при движении
         float currentAnimValue = animator != null ? (float) animator.getAnimatedValue() : 1f;
-        float morphEffect = (1.0f - currentAnimValue) * 0.1f; // сжатие на 10% макс
-
         canvas.drawRoundRect(sliderRect, r - sliderPadding, r - sliderPadding, sliderPaint);
 
         // --- 3. Рисуем текст ---
@@ -113,24 +116,26 @@ public class LiquidSegmentedControl extends View {
 
         for (int i = 0; i < tabs.size(); i++) {
             float tabCenterX = (tabWidth * i) + (tabWidth / 2f);
-
-            // Плавная смена цвета текста: оранжевый для выбранного, серый для остальных
             float ratio = 1.0f - Math.abs(sliderPosition - i);
             if (ratio < 0) ratio = 0;
             int textColor = (int) colorEval.evaluate(ratio, Color.parseColor("#666666"), Color.parseColor("#FF9800"));
             textPaint.setColor(textColor);
-
             canvas.drawText(tabs.get(i), tabCenterX, textY, textPaint);
         }
+
+        canvas.restore();  // восстанавливаем исходное состояние canvas
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            float x = event.getX();
-            float tabWidth = getWidth() / tabs.size();
-            int clickedIndex = (int) (x / tabWidth);
+        if (!isEnabled()) return false;
 
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            float x = event.getX() - bgLeft;   // переводим в координаты фона
+            if (x < 0 || x > bgWidth) return false; // игнорируем касания вне фона
+
+            float tabWidth = bgWidth / tabs.size();
+            int clickedIndex = (int) (x / tabWidth);
             if (clickedIndex != selectedIndex && clickedIndex < tabs.size()) {
                 setSelectedIndex(clickedIndex);
             }
@@ -163,4 +168,5 @@ public class LiquidSegmentedControl extends View {
     private float dpToPx(int dp) {
         return dp * getResources().getDisplayMetrics().density;
     }
+    private float dpToPx(float dp) { return dp * getResources().getDisplayMetrics().density; }
 }

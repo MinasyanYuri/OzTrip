@@ -5,44 +5,27 @@
     android:layout_height="match_parent"
     android:background="@drawable/bg_orange_glass"
     android:clipChildren="false"
-    android:clipToPadding="false">
+    android:clipToPadding="false"
+    android:id="@+id/coordinator">
 
-    <!-- КОНТЕЙНЕР КАРТЫ (видим по умолчанию) -->
+    <!-- ══════════ ВКЛАДКА КАРТА ══════════ -->
+
+    <FrameLayout
+        android:id="@+id/mapContentContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+    <!-- Карта -->
     <FrameLayout
         android:id="@+id/mapContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-
         <org.maplibre.android.maps.MapView
             android:id="@+id/mapView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             app:maplibre_renderTextureMode="true" />
-
     </FrameLayout>
-
-    <!-- КОНТЕЙНЕР AI-СТРАНИЦЫ (изначально скрыт) -->
-    <FrameLayout
-        android:id="@+id/aiContainer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:visibility="gone">
-
-        <!-- Здесь будет ваша AI-разметка. Для теста просто текст -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:text="🤖 AI АССИСТЕНТ\n\nЗдесь будет чат"
-            android:textSize="28sp"
-            android:textColor="#FFFFFF"
-            android:gravity="center"
-            android:background="#FF6200EE" />
-
-    </FrameLayout>
-
-
-
-
 
 
     <com.google.android.material.card.MaterialCardView
@@ -88,6 +71,7 @@
     </com.google.android.material.card.MaterialCardView>
 
     <LinearLayout
+        android:id="@+id/topPanel"
         android:layout_width="match_parent"
         android:layout_height="80dp"
         android:orientation="horizontal"
@@ -163,11 +147,6 @@
     </LinearLayout>
 
 
-
-
-
-
-
     <ImageView
 
         android:id="@+id/centerMarker"
@@ -187,7 +166,7 @@
         android:visibility="visible" />
 
     <LinearLayout
-
+        android:id="@+id/sideButtons"
         android:layout_width="wrap_content"
 
         android:layout_height="wrap_content"
@@ -344,22 +323,7 @@
 
 
 
-
-
-    <com.example.oztrip.LiquidSegmentedControl
-
-        android:id="@+id/liquid_nav"
-
-        android:layout_width="300dp"
-
-        android:layout_height="60dp"
-
-        android:layout_gravity="bottom|center_horizontal"
-
-        android:layout_marginBottom="25dp" />
-
-
-
+    </FrameLayout>
     <com.google.android.material.card.MaterialCardView
 
         android:id="@+id/infoCard"
@@ -372,6 +336,7 @@
 
         app:cardElevation="50dp"
 
+
         app:cardBackgroundColor="#E6212121"
 
         app:strokeWidth="1.5dp"
@@ -380,8 +345,9 @@
 
         app:behavior_hideable="true"
 
-        app:behavior_peekHeight="190dp"
-
+        android:clickable="false"
+        android:focusable="false"
+        android:translationZ="50dp"
         android:clipChildren="false"
 
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
@@ -628,10 +594,26 @@
 
             </LinearLayout>
 
+
         </RelativeLayout>
-
     </com.google.android.material.card.MaterialCardView>
-
+    <!-- ══════════ ВКЛАДКА AI ══════════ -->
+    <!-- AI-контейнер (изначально скрыт) -->
+    <FrameLayout
+        android:id="@+id/aiContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:elevation="0dp" />
+    <!-- Переключатель вкладок (поверх всего) -->
+    <com.example.oztrip.LiquidSegmentedControl
+        android:id="@+id/liquid_nav"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="25dp"
+        android:elevation="10dp" />
+    <!-- ══════════ ПЕРЕКЛЮЧАТЕЛЬ ВКЛАДОК (всегда видимый) ══════════ -->
 
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

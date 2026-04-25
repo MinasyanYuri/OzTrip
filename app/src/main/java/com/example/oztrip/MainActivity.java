@@ -17,6 +17,7 @@ import android.text.style.AbsoluteSizeSpan;
 import android.util.Log;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -30,6 +31,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -37,6 +39,10 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import org.maplibre.android.style.layers.Layer;
+import org.maplibre.android.style.layers.Property;
+import org.maplibre.android.style.layers.PropertyFactory;
 import org.maplibre.geojson.Feature;
 import org.maplibre.geojson.Point;
 import org.maplibre.android.geometry.LatLng;
@@ -75,7 +81,10 @@ import android.content.SharedPreferences;
 import android.content.Context;
 
 public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
-    private String lastPlaceId; // Всего лишь строка типа "relation/364092"
+    private LiquidSegmentedControl liquidNav;
+    private View infoCard;
+    private View mapContainer, btnSaveLocation, topPanel, centerMarker, sideButtons;
+    private FrameLayout mapContentContainer, aiContainer;
     private TravelRepository travelRepository;
     private boolean isDataLoaded = false; // флаг, чтобы не дублировать загрузку
     private ArrayList<TravelList> allTravelLists = new ArrayList<>(); // Список всех веток
@@ -83,7 +92,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private java.util.List<org.maplibre.android.geometry.LatLng> pathPoints = new java.util.ArrayList<>();
     private LatLng homeLatLng = new LatLng(40.1792, 44.5134); // Та самая база
     private MapView mapView;
-    private MapLibreMap mapLibre;
+    public MapLibreMap mapLibre;
     // Список всех сохраненных точек (баз)
 // Удаляем: private java.util.List<Feature> savedFeatures = new java.util.ArrayList<>();
     private SavedLocation currentlyEditingLocation;
@@ -246,7 +255,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pathPoints = new ArrayList<>();
 
         // 2. ПОТОМ Загружаем данные из памяти
-//        loadAllData();
+        loadAllData();
 
 
         if (allLists.isEmpty()) {
@@ -258,7 +267,99 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         try {
             MapLibre.getInstance(this);
             setContentView(R.layout.activity_main);
+// Собираем все View, которые должны быть видны только на вкладке Карта
+            // ======== Инициализация View и BottomSheet =========
 
+
+
+            // ======== Добавляем AiFragment =========
+            if (savedInstanceState == null) {
+                getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.aiContainer, new AiFragment())
+                        .commit();
+            }
+
+// Группы View, которые относятся к карте
+            mapContainer = findViewById(R.id.mapContainer);
+            btnSaveLocation = findViewById(R.id.btnSaveLocation);
+            topPanel = findViewById(R.id.topPanel);
+            centerMarker = findViewById(R.id.centerMarker);
+            sideButtons = findViewById(R.id.sideButtons);
+            infoCard = findViewById(R.id.infoCard);
+            mapContentContainer = findViewById(R.id.mapContentContainer);
+            aiContainer = findViewById(R.id.aiContainer);
+// остальные findViewById…
+
+
+
+            sheetBehavior = BottomSheetBehavior.from(infoCard);
+            sheetBehavior.setHideable(true);
+            sheetBehavior.setPeekHeight(450);                  // ставь здесь
+            sheetBehavior.setHalfExpandedRatio(0.4f);
+            sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+            setupBottomSheetCallbacks(); // <-- один раз здесь
+// Переключение вкладок
+            liquidNav = findViewById(R.id.liquid_nav);
+            if (liquidNav != null) {
+                liquidNav.setOnTabSelectedListener(index -> {
+                    if (mapView != null) {
+                        mapView.onResume();  // возобновить рендеринг
+                    }
+                    float screenWidth = getResources().getDisplayMetrics().widthPixels;
+                    if (index == 0) {
+                        // === КАРТА ===
+                        // AI-контейнер уезжает вправо
+                        aiContainer.animate()
+                                .translationX(screenWidth)
+                                .alpha(0f)
+                                .setDuration(400)
+                                .withEndAction(() -> {
+                                    aiContainer.setVisibility(View.GONE);
+                                    aiContainer.setTranslationX(0f);
+                                });
+
+                        // Контейнер карты выезжает слева
+                        mapContentContainer.setVisibility(View.VISIBLE);
+                        mapContentContainer.setTranslationX(-screenWidth);
+                        mapContentContainer.animate()
+                                .translationX(0f)
+                                .alpha(1f)
+                                .setDuration(400)
+                                .start();
+
+                        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                        if (mapLibre != null) mapLibre.getUiSettings().setAllGesturesEnabled(true);
+
+                    } else {
+                        // === ИИ ===
+                        if (mapView != null) {
+                            mapView.onPause();   // приостановить рендеринг
+                        }
+                        // Контейнер карты уезжает влево
+                        mapContentContainer.animate()
+                                .translationX(-screenWidth)
+                                .alpha(0f)
+                                .setDuration(400)
+                                .withEndAction(() -> {
+                                    mapContentContainer.setVisibility(View.INVISIBLE);
+                                    mapContentContainer.setTranslationX(0f); // сброс
+                                });
+
+                        // AI-контейнер появляется справа
+                        aiContainer.setVisibility(View.VISIBLE);
+                        aiContainer.setTranslationX(screenWidth);
+                        aiContainer.setAlpha(0f);
+                        aiContainer.animate()
+                                .translationX(0f)
+                                .alpha(1f)
+                                .setDuration(400)
+                                .start();
+
+                        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+
+                    }
+                });
+            }
 
 
 
@@ -279,23 +380,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             mapView = findViewById(R.id.mapView);
             if (mapView != null) mapView.onCreate(savedInstanceState);
 
-            // Поиск карточки
-            View infoCard = findViewById(R.id.infoCard);
 
-            if (infoCard != null) {
-                // Пытаемся привязать BottomSheet
-                try {
-                    sheetBehavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(infoCard);
-                    sheetBehavior.setHideable(true);
-                    sheetBehavior.setPeekHeight(450);
-                    sheetBehavior.setHalfExpandedRatio(0.4f);
-                    sheetBehavior.setState(BottomSheetBehavior.STATE_HALF_EXPANDED);
-                    sheetBehavior.setState(com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_HIDDEN);
-                } catch (IllegalArgumentException e) {
-                    // Это спасет от вылета, если в XML не CoordinatorLayout или нет атрибута Behavior
-                    Toast.makeText(this, "Ошибка XML: Добавьте CoordinatorLayout!", Toast.LENGTH_LONG).show();
-                }
-            }
+
+
 
             // Проверяем, залогинен ли пользователь
             FirebaseAuth auth = FirebaseAuth.getInstance();
@@ -307,57 +394,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             }
             travelRepository = new TravelRepository();
             loadTravelDataFromCloud();
-            sheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
-                @Override
-                public void onStateChanged(@NonNull View bottomSheet, int newState) {
-                    // Здесь теперь ничего скрывать не нужно, кнопка всегда видна
-                }
-
-                @Override
-                public void onSlide(@NonNull View bottomSheet, float slideOffset) {
-                    View saveBtn = findViewById(R.id.btnSaveLocation);
-                    if (saveBtn != null) {
-                        // 1. Текущий верх карточки
-                        float sheetTop = bottomSheet.getTop();
-
-                        // 2. Рассчитываем, где кнопка находится "в покое" (над ползунком)
-                        // screenHeight - marginBottom (110dp) - высота кнопки
-                        int screenHeight = getResources().getDisplayMetrics().heightPixels;
-                        float buttonDefaultTop = screenHeight - dpToPx(110) - saveBtn.getHeight();
-
-                        // 3. Зазор между кнопкой и карточкой (например, 15dp)
-                        float gap = dpToPx(15);
-
-                        // Если верх карточки подошел слишком близко к низу кнопки
-                        if (sheetTop < (buttonDefaultTop + saveBtn.getHeight() + gap)) {
-                            // Вычисляем, насколько нужно "подпрыгнуть" кнопке
-                            // Новое положение кнопки должно быть: sheetTop - gap - высота_кнопки
-                            // Но так как мы меняем TranslationY, мы вычитаем это из начальной позиции
-                            float targetY = sheetTop - gap - saveBtn.getHeight();
-                            float offset = targetY - buttonDefaultTop;
-
-                            saveBtn.setTranslationY(offset);
-                        } else {
-                            // Если карточка далеко — возвращаем кнопку на её законное место над ползунком
-                            saveBtn.setTranslationY(0);
-                        }
-                    }
-                }
-            });
             setupButtons();
 
-            LiquidSegmentedControl liquidNav = findViewById(R.id.liquid_nav);
-            if (liquidNav != null) {
-                liquidNav.setOnTabSelectedListener(index -> {
-                    if (index == 0) {
-                        findViewById(R.id.mapContainer).setVisibility(View.VISIBLE);
-                        findViewById(R.id.aiContainer).setVisibility(View.GONE);
-                    } else {
-                        findViewById(R.id.mapContainer).setVisibility(View.GONE);
-                        findViewById(R.id.aiContainer).setVisibility(View.VISIBLE);
-                    }
-                });
-            }
             if (mapView != null) {
                 mapView.getMapAsync(map -> {
                     this.mapLibre = map;
@@ -402,7 +440,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     // ДОБАВЛЯЕМ КЛИК ПО КАРТЕ
 // СЛУШАТЕЛЬ ДЛИННОГО НАЖАТИЯ
                     map.addOnMapLongClickListener(point -> {
-                        mapView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                        findViewById(android.R.id.content).performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
                         // 1. Показываем визуальный "указатель" (пин) на карте
                         showMarkerAt(point.getLatitude(), point.getLongitude());
 
@@ -448,7 +486,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     });
                     map.addOnCameraMoveListener(() -> {
                         // 1. Убедимся, что метка включена и геолокация доступна
-                        View centerMarker = findViewById(R.id.centerMarker);
+
                         LocationComponent locationComponent = map.getLocationComponent();
 
                         if (centerMarker != null && centerMarker.getVisibility() == View.VISIBLE
@@ -538,14 +576,92 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
     }
 
+    private void animateSlideInLeft(View view, float screenWidth, int duration) {
+        if (view == null) return;
+        view.setVisibility(View.VISIBLE);
+        view.setTranslationX(-screenWidth);
+        view.animate()
+                .translationX(0f)
+                .alpha(1f)
+                .setDuration(duration)
+                .start();
+    }
 
+    // Вернуть список всех поездок
+    public List<TravelList> getAllTravelLists() {
+        return allLists;
+    }
 
+    // Вернуть текущую активную поездку
+    public TravelList getCurrentActiveList() {
+        return currentActiveList;
+    }
+
+    // Вернуть уникальные локации активной поездки
     public List<SavedLocation> getUniqueLocations() {
         return uniqueLocations;
     }
 
+    // Вернуть путь активной поездки
     public List<LatLng> getPathPoints() {
         return pathPoints;
+    }
+
+    // Получить текущее местоположение (если геолокация включена)
+    public android.location.Location getCurrentLocation() {
+        if (mapLibre != null && mapLibre.getLocationComponent() != null &&
+                mapLibre.getLocationComponent().getLastKnownLocation() != null) {
+            return mapLibre.getLocationComponent().getLastKnownLocation();
+        }
+        return null;
+    }
+
+    private void fadeOutView(View view, int duration) {
+        view.animate().alpha(0f).setDuration(duration)
+                .withEndAction(() -> view.setVisibility(View.INVISIBLE));
+    }
+    private void setupBottomSheetCallbacks() {
+        sheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                if (newState == BottomSheetBehavior.STATE_COLLAPSED || newState == BottomSheetBehavior.STATE_EXPANDED) {
+                    //findViewById(R.id.btnSaveLocation).setEnabled(false);
+                    findViewById(R.id.btnSaveLocation).setEnabled(true);
+                } else {
+                    findViewById(R.id.btnSaveLocation).setEnabled(true);
+                }
+                if (mapLibre != null) {
+                    boolean gesturesEnabled = (newState == BottomSheetBehavior.STATE_HIDDEN);
+                    mapLibre.getUiSettings().setAllGesturesEnabled(gesturesEnabled);
+                }
+                if (liquidNav != null) {
+                    liquidNav.setEnabled(newState == BottomSheetBehavior.STATE_HIDDEN);
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+                View saveBtn = findViewById(R.id.btnSaveLocation);
+                if (saveBtn != null) {
+                    float sheetTop = bottomSheet.getTop();
+                    int screenHeight = getResources().getDisplayMetrics().heightPixels;
+                    float buttonDefaultTop = screenHeight - dpToPx(110) - saveBtn.getHeight();
+                    float gap = dpToPx(15);
+                    if (sheetTop < (buttonDefaultTop + saveBtn.getHeight() + gap)) {
+                        float targetY = sheetTop - gap - saveBtn.getHeight();
+                        float offset = targetY - buttonDefaultTop;
+                        saveBtn.setTranslationY(offset);
+                    } else {
+                        saveBtn.setTranslationY(0);
+                    }
+                }
+            }
+        });
+    }
+
+    public void invalidateAiContext() {
+        AiFragment aiFragment = (AiFragment) getSupportFragmentManager().findFragmentById(R.id.aiContainer);
+        if (aiFragment != null) aiFragment.clearCachedContext();
     }
 
     private String loadStyleFromAssets() {
@@ -1054,34 +1170,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 }
             }
     );
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == 1001 && resultCode == RESULT_OK && data != null && currentlyEditingLocation != null) {
-            android.net.Uri selectedImageUri = data.getData();
-            if (selectedImageUri != null) {
-                // Сбрасываем старую иконку, чтобы метод createPremiumMarker перерисовал её с новым фото
-                currentlyEditingLocation.cachedIcon = null;
-
-                currentlyEditingLocation.photoPaths.add(selectedImageUri.toString());
-
-                // Обновляем карту
-                refreshSavedPoints();
-                showLocationCard(currentlyEditingLocation);
-            }
-        }
-    }
     private void hideManualOverlays() {
         mapLibre.getStyle(style -> {
             // Прячем ручную точку
-            org.maplibre.android.style.layers.Layer marker = style.getLayer("marker-layer");
-            org.maplibre.android.style.layers.Layer shadow = style.getLayer("marker-shadow");
-            if (marker != null)
-                marker.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
-            if (shadow != null)
-                shadow.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
-
+// В hideManualOverlays и clearMapOverlays:
+            Layer marker = style.getLayer("marker-layer");
+            Layer shadow = style.getLayer("marker-shadow");
+            if (marker != null) marker.setProperties(PropertyFactory.visibility(Property.VISIBLE));
+            if (shadow != null) shadow.setProperties(PropertyFactory.visibility(Property.VISIBLE));
             // Прячем границы районов
             if (style.getSource("boundary-source") != null) {
                 style.removeLayer("boundary-layer");
@@ -1093,16 +1190,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void clearMapOverlays() {
         if (mapLibre == null) return;
+        mapLibre.getUiSettings().setAllGesturesEnabled(true); // Включаем обратно
 
         mapLibre.getStyle(style -> {
             // 1. Скрываем указатель (пин)
-            org.maplibre.android.style.layers.Layer marker = style.getLayer("marker-layer");
-            org.maplibre.android.style.layers.Layer shadow = style.getLayer("marker-shadow");
-            if (marker != null)
-                marker.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
-            if (shadow != null)
-                shadow.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
-
+            // В hideManualOverlays и clearMapOverlays:
+            Layer marker = style.getLayer("marker-layer");
+            Layer shadow = style.getLayer("marker-shadow");
+            if (marker != null) marker.setProperties(PropertyFactory.visibility(Property.VISIBLE));
+            if (shadow != null) shadow.setProperties(PropertyFactory.visibility(Property.VISIBLE));
             // 2. Убираем границы районов
             if (style.getSource("boundary-source") != null) {
                 style.removeLayer("boundary-layer");
@@ -1252,51 +1348,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void setupButtons() {
-        rvTravelLists = findViewById(R.id.rvTravelLists);
-        rvTravelLists.setHasFixedSize(true);
-        rvTravelLists.setItemAnimator(new androidx.recyclerview.widget.DefaultItemAnimator());
-        listAdapter = new TravelListAdapter(allLists, new TravelListAdapter.OnListClickListener() {
-            @Override
-            public void onListClick(int position) {
-                // Сохраняем текущую ветку перед переключением
-                saveAllData();
-                syncAllDataToCloud();
 
-                // Переключаемся
-                currentActiveList = allLists.get(position);
-
-                // ПРЯМАЯ ПРИВЯЗКА ссылок (не копируем, а переключаем указатель)
-                pathPoints = currentActiveList.pathPoints;
-                uniqueLocations = currentActiveList.locations;
-
-                // Защита от null
-                if (pathPoints == null) {
-                    currentActiveList.pathPoints = new ArrayList<>();
-                    pathPoints = currentActiveList.pathPoints;
-                }
-                if (uniqueLocations == null) {
-                    currentActiveList.locations = new ArrayList<>();
-                    uniqueLocations = currentActiveList.locations;
-                }
-
-                // Перерисовываем карту
-                refreshSavedPoints();
-
-                // Летим к первой точке этой ветки
-                if (!uniqueLocations.isEmpty()) {
-                    mapLibre.animateCamera(CameraUpdateFactory.newLatLngZoom(
-                            uniqueLocations.get(0).latLng, 14), 1000);
-                }
-            }
-
-            @Override
-            public void onListRename(int position, String oldName) {
-                // Получаем текущее имя из списка по позиции и передаем в метод
-                String currentName = allLists.get(position).name;
-                showRenameDialog(position, currentName);
-            }
-        });
-        rvTravelLists.setAdapter(listAdapter);
 
 // Кнопка ПЛЮСИК (btnAddList)
         findViewById(R.id.btnAddList).setOnClickListener(v -> {
@@ -1399,6 +1451,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     sheetBehavior.setState(com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_HIDDEN);
                 }
             });
+        }
+        if (mapLibre != null) {
+            mapLibre.getUiSettings().setAllGesturesEnabled(true); // Включаем обратно
         }
         // Кнопка Компаса (выравнивание на Север)
         // Внутри setupButtons()
@@ -1822,10 +1877,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             saveBtn.setAlpha(1f);
         }
 
-        if (sheetBehavior != null) {
-            sheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
-        }
 
+        if (sheetBehavior != null) {
+            // Принудительно сообщаем BottomSheetBehaviour актуальную высоту
+            sheetBehavior.setPeekHeight(450);
+            sheetBehavior.setPeekHeight(450);
+            if (mapLibre != null) {
+                mapLibre.getUiSettings().setAllGesturesEnabled(false); // Отключаем карту
+            }
+            sheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+            infoCard.requestLayout();  // гарантируем пересчёт лэйаута
+            // ВОТ ЭТА СТРОЧКА:
+            infoCard.bringToFront();
+        }
 
 
 
@@ -1836,6 +1900,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             txtFlora.setText(type);
             txtFlora.setSelected(true); // Это запустит бегущую строку (marquee), если настроено в XML
         };
+
 
         // Высота (рандом для красоты или можно взять из API)
         if (txtHeight != null) txtHeight.setText("--m");
