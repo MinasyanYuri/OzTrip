@@ -35,7 +35,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class AiFragment extends Fragment {
-
+    private String cachedWeather = null;
     private RecyclerView chatRecyclerView;
     private EditText messageInput;
     private ImageView sendButton;
@@ -48,7 +48,7 @@ public class AiFragment extends Fragment {
     private String resetTime = null;
     private int remainingTokens = -1;
 
-    private static final String API_KEY = "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";
+    private static final String API_KEY = "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";
     private static final String API_URL = "https://openrouter.ai/api/v1/chat/completions";
     private static final String MODEL = "openrouter/free";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -104,45 +104,47 @@ public class AiFragment extends Fragment {
         ChatMessage typing = new ChatMessage("...", false);
         chatAdapter.addMessage(typing);
 
-        // Контекст с личными данными (только по запросу)
-        if (isDataRequest(text) && (cachedContext == null || cachedContext.isEmpty())) {
-            cachedContext = buildFullContext();
-        } else if (!isDataRequest(text)) {
-            cachedContext = "";
-        }
+        // Проверяем, нужна ли погода, и если да — получим её перед отправкой
+        fetchWeatherIfNeeded(text, () -> {
+            // Контекст с личными данными (только по запросу)
+            if (isDataRequest(text) && (cachedContext == null || cachedContext.isEmpty())) {
+                cachedContext = buildFullContext();
+            } else if (!isDataRequest(text)) {
+                cachedContext = "";
+            }
 
-        // Системный промпт с правилами и информацией о лимитах
-        String systemPrompt =
-                "Ты — OzTrip AI, персональный гид по Армении и ассистент путешественника.\n" +
-                        "Ты имеешь доступ к личным данным пользователя: его текущему местоположению, списку поездок, " +
-                        "сохранённым точкам на карте, заметкам и рейтингам.\n\n" +
-                        "ВАЖНЫЕ ПРАВИЛА:\n" +
-                        "1. ИСПОЛЬЗУЙ ЛИЧНЫЕ ДАННЫЕ ТОЛЬКО ТОГДА, КОГДА ПОЛЬЗОВАТЕЛЬ ЯВНО ПРОСИТ ОБ ЭТОМ.\n" +
-                        "   Например: «посоветуй маршрут по моим точкам», «что рядом с моим местоположением», «расскажи о моих поездках».\n" +
-                        "2. ВО ВСЕХ ОСТАЛЬНЫХ СЛУЧАЯХ ОТВЕЧАЙ КАК ОБЫЧНЫЙ ТУРИСТИЧЕСКИЙ ПОМОЩНИК, не упоминая координаты, названия сохранённых точек и прочую личную информацию.\n" +
-                        "3. Если сомневаешься — НЕ используй личные данные.\n" +
-                        "4. Никогда не перечисляй все сохранённые точки подряд, если только пользователь не попросит 'покажи все мои места'.\n\n";
+            // Системный промпт (как выше)
+            String systemPrompt =
+                    "Ты — OzTrip AI, персональный гид по Армении и ассистент путешественника.\n" +
+                            "Ты имеешь доступ к личным данным пользователя: его текущему местоположению, списку поездок, " +
+                            "сохранённым точкам на карте, заметкам и рейтингам.\n\n" +
+                            "ВАЖНЫЕ ПРАВИЛА:\n" +
+                            "1. ИСПОЛЬЗУЙ ЛИЧНЫЕ ДАННЫЕ ТОЛЬКО ТОГДА, КОГДА ЭТО УМЕСТНО. " +
+                            "На вопросы о погоде, местоположении, 'что рядом', 'где я' отвечай, используя координаты пользователя.\n" +
+                            "2. Не перечисляй все сохранённые точки без прямого запроса.\n" +
+                            "3. Если пользователь спрашивает 'какая погода', опирайся на данные о погоде, если они предоставлены.\n" +
+                            "4. На вопрос 'где я' называй координаты и, если известно, ближайший ориентир из сохранённых точек.\n\n";
 
-        if (!cachedContext.isEmpty()) {
-            systemPrompt += "Личные данные пользователя (конфиденциально):\n" + cachedContext + "\n";
-        }
+            if (!cachedContext.isEmpty()) {
+                systemPrompt += "Личные данные пользователя (конфиденциально):\n" + cachedContext + "\n";
+            }
 
-        // Информация о лимитах (без ключевых слов, модель сама поймёт, когда её использовать)
-        if (remainingRequests >= 0) {
-            systemPrompt += String.format(
-                    "Текущие лимиты запросов OpenRouter: осталось запросов: %d, сброс через: %s, осталось токенов: %d.\n",
-                    remainingRequests,
-                    (resetTime != null ? resetTime : "неизвестно"),
-                    remainingTokens
-            );
-            systemPrompt += "Если пользователь спросит о лимитах, используй эти числа.\n";
-        } else {
-            systemPrompt += "Информация о лимитах запросов пока не загружена (возможно, из-за бесплатного тарифа).\n";
-            systemPrompt += "Если пользователь спросит о лимитах, скажи, что данные ещё не получены, но можно проверить их вручную на openrouter.ai/limits. Не говори «функция не реализована».\n";
-        }
+            // Добавляем погоду, если она была получена
+            if (cachedWeather != null) {
+                systemPrompt += "Данные о погоде: " + cachedWeather + "\n";
+            }
 
-        String fullUserMessage = systemPrompt + "\nПользователь: " + text;
-        fetchAIResponse(fullUserMessage);
+            // Информация о лимитах
+            if (remainingRequests >= 0) {
+                systemPrompt += String.format("Текущие лимиты OpenRouter: запросов осталось %d, сброс %s, токенов %d.\n",
+                        remainingRequests, resetTime != null ? resetTime : "неизвестно", remainingTokens);
+            } else {
+                systemPrompt += "Лимиты запросов ещё не загружены.\n";
+            }
+
+            String fullUserMessage = systemPrompt + "\nПользователь: " + text;
+            fetchAIResponse(fullUserMessage);
+        });
     }
 
     /**
@@ -212,7 +214,69 @@ public class AiFragment extends Fragment {
 
         return ctx.toString();
     }
+    private void fetchWeatherIfNeeded(String userMessage, Runnable onReady) {
+        // Простая проверка: если пользователь упоминает погоду
+        String lower = userMessage.toLowerCase();
+        if (lower.contains("погод") || lower.contains("температур") || lower.contains("градус")
+                || lower.contains("дожд") || lower.contains("ветер") || lower.contains("влажн")) {
 
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity == null) {
+                onReady.run();
+                return;
+            }
+            Location loc = activity.getCurrentLocation();
+            if (loc == null) {
+                cachedWeather = "Местоположение неизвестно, погода недоступна.";
+                onReady.run();
+                return;
+            }
+            // Делаем запрос к Open-Meteo
+            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + loc.getLatitude() +
+                    "&longitude=" + loc.getLongitude() + "&current_weather=true";
+
+            executor.execute(() -> {
+                try {
+                    OkHttpClient client = new OkHttpClient.Builder()
+                            .connectTimeout(10, TimeUnit.SECONDS)
+                            .readTimeout(10, TimeUnit.SECONDS)
+                            .build();
+                    Request request = new Request.Builder().url(url).build();
+                    Response response = client.newCall(request).execute();
+                    if (response.isSuccessful()) {
+                        JSONObject json = new JSONObject(response.body().string());
+                        JSONObject current = json.getJSONObject("current_weather");
+                        double temp = current.getDouble("temperature");
+                        double wind = current.getDouble("windspeed");
+                        int weatherCode = current.getInt("weathercode");
+                        String desc = getWeatherDescription(weatherCode);
+                        cachedWeather = String.format(Locale.US,
+                                "Погода в вашей локации: %.0f°C, ветер %.1f км/ч, %s.", temp, wind, desc);
+                    } else {
+                        cachedWeather = "Не удалось получить погоду.";
+                    }
+                } catch (Exception e) {
+                    cachedWeather = "Ошибка получения погоды.";
+                }
+                mainHandler.post(onReady);
+            });
+        } else {
+            // Погода не нужна, убираем кэш
+            cachedWeather = null;
+            onReady.run();
+        }
+    }
+    private String getWeatherDescription(int code) {
+        if (code <= 1) return "ясно";
+        if (code <= 3) return "облачно";
+        if (code <= 48) return "туман";
+        if (code <= 57) return "морось";
+        if (code <= 67) return "дождь";
+        if (code <= 77) return "снег";
+        if (code <= 82) return "ливень";
+        if (code <= 86) return "снегопад";
+        return " гроза";
+    }
     private void fetchAIResponse(String fullUserMessage) {
         executor.execute(() -> {
             try {

@@ -29,6 +29,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
@@ -761,7 +762,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
     private void setupRecyclerView() {
         rvTravelLists = findViewById(R.id.rvTravelLists); // Убедись, что ID совпадает с XML
+        TextView tvCount = findViewById(R.id.tvTravelCount);
+        updateTravelCount(); // метод, который установит цифру
 
+        tvCount.setOnClickListener(v -> {
+            TravelListSheetFragment sheet = new TravelListSheetFragment();
+            sheet.show(getSupportFragmentManager(), "travel_list_sheet");
+        });
+
+// Обновление цифры при изменениях
         if (rvTravelLists != null) {
             // 1. Настраиваем менеджер компоновки (Горизонтальный список)
             LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
@@ -778,32 +787,43 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 @Override
                 public void onListRename(int position, String oldName) {
                     // Вызываем твой диалог переименования
-                    showRenameDialog(position, allLists.get(position).name);
+                    showRenameDialog(position, allLists.get(position).name,null);
                 }
             });
 
             rvTravelLists.setAdapter(listAdapter);
 
             // Чтобы список не "прыгал"
-            rvTravelLists.setHasFixedSize(true);
+            //rvTravelLists.setHasFixedSize(true);
         }
     }
-    private void switchTravelList(int position) {
-        saveAllData(); // Сохраняем перед переключением
+    public void removeTravelListByIndex(int index) {
+        if (index >= 0 && index < allLists.size()) {
+            deleteTravelList(index); // уже умеет удалять и обновлять UI
+        }
+    }
+    public int getActiveListIndex() {
+        return allLists.indexOf(currentActiveList);
+    }
+    public void switchTravelList(int position) {
+        saveAllData();
 
         currentActiveList = allLists.get(position);
 
-        // Защита от null после десериализации
         if (currentActiveList.pathPoints == null)
             currentActiveList.pathPoints = new ArrayList<>();
         if (currentActiveList.locations == null)
             currentActiveList.locations = new ArrayList<>();
 
-        // Просто переприцепляем указатели — больше нигде не присваиваем обратно
         pathPoints = currentActiveList.pathPoints;
         uniqueLocations = currentActiveList.locations;
-
+        invalidateAiContext();
         refreshSavedPoints();
+
+        // 👇 Обновляем выделение в ползунке
+        if (listAdapter != null) {
+            listAdapter.setSelectedIndex(position);
+        }
 
         if (!uniqueLocations.isEmpty()) {
             mapLibre.animateCamera(
@@ -830,6 +850,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     .addAll(pathPoints)
                     .color(Color.parseColor("#FF9800"))
                     .width(dpToPx(4)));
+        }
+    }
+    private void updateTravelCount() {
+        TextView tvCount = findViewById(R.id.tvTravelCount);
+        if (tvCount != null) {
+            tvCount.setText(String.valueOf(allLists.size()));
         }
     }
     private void showLocationCard(SavedLocation loc) {
@@ -1372,6 +1398,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             refreshSavedPoints();
             saveAllData();
             syncAllDataToCloud();
+            updateTravelCount();
         });
         // Поиск
         // Поиск – кастомный премиум-диалог
@@ -1428,19 +1455,23 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 LatLng currentPos = mapLibre.getCameraPosition().target;
                 SavedLocation newLoc = new SavedLocation(currentPos);
 
-                // Добавляем напрямую — ссылки уже правильно привязаны
                 uniqueLocations.add(newLoc);
                 pathPoints.add(currentPos);
 
-                // НЕ НУЖНО: currentActiveList.locations = (ArrayList) uniqueLocations;
-                // НЕ НУЖНО: currentActiveList.pathPoints = (ArrayList) pathPoints;
-
+                invalidateAiContext();   // чтобы ИИ увидел новую точку
                 refreshSavedPoints();
                 saveAllData();
                 syncAllDataToCloud();
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-            });
 
+                // Закрываем информационную карточку (если открыта)
+                if (sheetBehavior != null && sheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN) {
+                    sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                }
+
+                // Мгновенно открываем редактор для только что созданной точки
+                showLocationCard(newLoc);
+            });
         }
 
         // Кнопка закрытия карточки
@@ -1641,7 +1672,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             return null;
         }
     }
-    private void showRenameDialog(int position, String oldName) {
+    public void showRenameDialog(int position, String oldName, @Nullable Runnable onRenamed) {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_rename, null);
         EditText etName = dialogView.findViewById(R.id.etNewName);
         etName.setText(oldName);
@@ -1659,6 +1690,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 if (listAdapter != null) listAdapter.notifyItemChanged(position);
                 saveAllData();
                 syncAllDataToCloud();
+                updateTravelCount();
+                if (onRenamed != null) onRenamed.run();
             }
             dialog.dismiss();
         });
@@ -1717,12 +1750,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             }
             uniqueLocations = currentActiveList.locations;
             pathPoints = currentActiveList.pathPoints;
+            invalidateAiContext();
         }
 
         // 4. Обновляем адаптер и карту
         if (listAdapter != null) listAdapter.notifyDataSetChanged();
         refreshSavedPoints();
-
+        updateTravelCount();
         // 5. Сохраняем изменения локально и в облаке
         saveAllData();
         syncAllDataToCloud();
