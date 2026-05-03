@@ -52,9 +52,9 @@
         <item name="bottomSheetStyle">@style/TransparentBottomSheetStyle</item>
     </style>
 
-    <style name="TransparentBottomSheetStyle" parent="Widget.Design.BottomSheet.Modal">
-        <item name="android:background">@android:color/transparent</item>
-    </style>
+<!--    <style name="TransparentBottomSheetStyle" parent="Widget.Design.BottomSheet.Modal">-->
+<!--        <item name="android:background">@android:color/transparent</item>-->
+<!--    </style>-->
 
     <style name="DialogAnimation">
         <item name="android:windowEnterAnimation">@anim/slide_up</item>
@@ -109,4 +109,13 @@
         <item name="android:windowContentOverlay">@null</item>
     </style>
 
+    <style name="TransparentBottomSheet" parent="Theme.Design.Light.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/TransparentBottomSheetStyle</item>
+    </style>
+
+    <style name="TransparentBottomSheetStyle" parent="Widget.Design.BottomSheet.Modal">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorBackground">@android:color/transparent</item>
+    </style>
 </resources>

@@ -1,5 +1,6 @@
 package com.example.oztrip;
 
+import android.app.Dialog;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -18,6 +19,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
 import java.util.ArrayList;
@@ -36,6 +38,12 @@ public class TravelListSheetFragment extends BottomSheetDialogFragment {
     private List<TravelList> allLists;
     private int activeIndex;
     private List<Integer> indexMap = new ArrayList<>();
+
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
+        return new BottomSheetDialog(requireContext(), R.style.TransparentBottomSheet);
+    }
 
     @Nullable
     @Override

@@ -65,6 +65,7 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:layout_marginBottom="8dp"
+        android:background="@android:color/transparent"
         android:visibility="gone"
         android:paddingVertical="4dp">
 
@@ -99,43 +100,35 @@
     </LinearLayout>
 
     <!-- Поле поиска -->
-    <com.google.android.material.card.MaterialCardView
+    <!-- Поле поиска (стеклянное, без квадрата) -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="50dp"
-        app:cardCornerRadius="25dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="#22FFFFFF"
-        app:strokeColor="#33FF9800"
-        app:strokeWidth="1dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_search_glass"
+        android:paddingHorizontal="16dp"
         android:layout_marginBottom="12dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_search_mini"
+            app:tint="#80FFFFFF" />
+
+        <EditText
+            android:id="@+id/etSearchList"
+            android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp">
-
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:src="@drawable/ic_search_mini"
-                app:tint="#80FFFFFF" />
-
-            <EditText
-                android:id="@+id/etSearchList"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:hint="Поиск поездки..."
-                android:textColor="#FFFFFF"
-                android:textColorHint="#66FFFFFF"
-                android:background="@null"
-                android:textSize="14sp"
-                android:inputType="text"
-                android:paddingHorizontal="8dp" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+            android:layout_weight="1"
+            android:hint="Поиск поездки..."
+            android:textColor="#FFFFFF"
+            android:textColorHint="#66FFFFFF"
+            android:background="@null"
+            android:textSize="14sp"
+            android:inputType="text"
+            android:paddingHorizontal="8dp" />
+    </LinearLayout>
 
     <!-- Список поездок -->
     <androidx.recyclerview.widget.RecyclerView
