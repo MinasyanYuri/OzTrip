@@ -1,11 +1,21 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.OzTrip" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
-    </style>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.OzTrip" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Основные акценты -->
+        <item name="colorPrimary">#FF9800</item>
+        <item name="colorPrimaryVariant">#E65100</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#FF9800</item>
+        <item name="colorSecondaryVariant">#E65100</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
 
-    <style name="Theme.OzTrip" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
-        <item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
+        <!-- Фоны и поверхности -->
+        <item name="android:colorBackground">#FFFDE7</item>
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="colorOnSurface">#212121</item>
+
+        <!-- Текст -->
+        <item name="android:textColorPrimary">#212121</item>
+        <item name="android:textColorSecondary">#757575</item>
     </style>
 </resources>

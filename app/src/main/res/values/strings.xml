@@ -1,3 +1,454 @@
 <resources>
+
+
     <string name="app_name">OzTrip</string>
+
+
+    <string name="text_1">Создай свой стиль</string>
+
+
+    <string name="text_2">Выбери цвет фона</string>
+
+
+    <string name="text_3">Выбрать персонажа</string>
+
+
+    <string name="text_4">Применить стиль</string>
+
+
+    <string name="text_5">Назад</string>
+
+
+    <string name="text_6">ПРОФИЛЬ</string>
+
+
+    <string name="text_7">Имя пользователя</string>
+
+
+    <string name="text_8">Никнейм (@)</string>
+
+
+    <string name="text_9">Электронная почта</string>
+
+
+    <string name="text_10">Безопасность (Пароль)</string>
+
+
+    <string name="text_11">СОХРАНИТЬ ДАННЫЕ</string>
+
+
+    <string name="text_12">Ваше имя</string>
+
+
+    <string name="text_13">username</string>
+
+
+    <string name="text_14">••••••••</string>
+
+
+    <string name="text_15">С возвращением в</string>
+
+
+    <string name="text_16">OzTrip</string>
+
+
+    <string name="text_17">Email или Никнейм</string>
+
+
+    <string name="text_18">Ваш пароль</string>
+
+
+    <string name="text_19">Войти</string>
+
+
+    <string name="text_20">Продолжить как гость</string>
+
+
+    <string name="text_21">Нет аккаунта? Зарегистрироваться</string>
+
+
+    <string name="text_22">Введите почту или ник</string>
+
+
+    <string name="text_23">Сохранить</string>
+
+
+    <string name="text_24">3</string>
+
+
+    <string name="text_25">Выберите место</string>
+
+
+    <string name="text_26">📍 Тяните вверх для деталей</string>
+
+
+    <string name="text_27">--°C</string>
+
+
+    <string name="text_28">ТЕМП.</string>
+
+
+    <string name="text_29">--m</string>
+
+
+    <string name="text_30">ВЫСОТА</string>
+
+
+    <string name="text_31">---</string>
+
+
+    <string name="text_32">КООРДИНАТЫ</string>
+
+
+    <string name="text_33">Настройка профиля</string>
+
+
+    <string name="text_34">Username (уникальный)</string>
+
+
+    <string name="text_35">Имя занято. Попробуйте:</string>
+
+
+    <string name="text_36">Продолжить</string>
+
+
+    <string name="text_37">Например: oztrip_fan</string>
+
+
+    <string name="text_38">Введите имя</string>
+
+
+    <string name="text_39">Добро пожаловать в</string>
+
+
+    <string name="text_40">Пароль (мин. 6 символов)</string>
+
+
+    <string name="text_41">Создать аккаунт</string>
+
+
+    <string name="text_42">Уже есть профиль? Войти</string>
+
+
+    <string name="text_43">mail@example.com</string>
+
+
+    <string name="text_44">Настройки</string>
+
+
+    <string name="text_45">Изменить профиль</string>
+
+
+    <string name="text_46">Тёмная тема</string>
+
+
+    <string name="text_47">Единицы \nизмерения</string>
+
+
+    <string name="text_48">Км</string>
+
+
+    <string name="text_49">Очистить кэш карты</string>
+
+
+    <string name="text_50">О приложении</string>
+
+
+    <string name="text_51">Выйти из аккаунта</string>
+
+
+    <string name="text_52">МОИ ПОЕЗДКИ</string>
+
+
+    <string name="text_53">Выбрать</string>
+
+
+    <string name="text_54">0 выбрано</string>
+
+
+    <string name="text_55">Отмена</string>
+
+
+    <string name="text_56">Удалить</string>
+
+
+    <string name="text_57">Поиск поездки...</string>
+
+
+    <string name="text_58">Подтверждение</string>
+
+
+    <string name="text_59">Введите пароль для доступа</string>
+
+
+    <string name="text_60">ПОДТВЕРДИТЬ</string>
+
+
+    <string name="text_61">Пароль</string>
+
+
+    <string name="text_62">Удалить поездку?</string>
+
+
+    <string name="text_63">Вы уверены, что хотите удалить &amp;quot;Поездка 1&amp;quot;? Все точки и фотографии будут удалены безвозвратно.</string>
+
+
+    <string name="text_64">Удалить точку?</string>
+
+
+    <string name="text_65">Вы уверены, что хотите удалить эту точку? Все фото и данные будут удалены безвозвратно.</string>
+
+
+    <string name="text_66">Переименовать поездку</string>
+
+
+    <string name="text_67">Удалить поездку</string>
+
+
+    <string name="text_68">Название</string>
+
+
+    <string name="text_69">Поиск места</string>
+
+
+    <string name="text_70">Найти</string>
+
+
+    <string name="text_71">Например: Ереван, Абовяна</string>
+
+
+    <string name="text_72">OzAI</string>
+
+
+    <string name="text_73">Спроси меня о путешествии...</string>
+
+
+    <string name="text_74">Отправить</string>
+
+
+    <string name="text_75">Переименовать</string>
+
+
+    <string name="text_76">Выбери своего героя</string>
+
+
+    <string name="text_77">Загрузить фото из галереи</string>
+
+
+    <string name="text_78">Вернуть инициалы</string>
+
+
+    <string name="text_79">Точка на карте</string>
+
+
+    <string name="text_80">Фотографии</string>
+
+
+    <string name="text_81">Оценка места</string>
+
+
+    <string name="text_82">Назначить дату</string>
+
+
+    <string name="text_83">Удалить точку</string>
+
+
+    <string name="text_84">Добавьте заметку...</string>
+
+
+    <string name="text_85">Язык</string>
+
+
+    <string name="text_86">Русский</string>
+
+
+    <string name="text_87">Английский</string>
+
+
+    <string name="text_88">Армянский</string>
+
+
+    <string name="text_auto_1">Привет! Я OzTrip AI. Теперь я знаю всё о твоих поездках. Спрашивай!</string>
+    <string name="text_auto_2">мои</string>
+    <string name="text_auto_3">поездки</string>
+    <string name="text_auto_4">точки</string>
+    <string name="text_auto_5">маршрут</string>
+    <string name="text_auto_6">данные</string>
+    <string name="text_auto_7">где я</string>
+    <string name="text_auto_8">рядом</string>
+    <string name="text_auto_9">сохранённые</string>
+    <string name="text_auto_10">Ты — OzTrip AI, персональный гид по Армении и ассистент путешественника.\n</string>
+    <string name="text_auto_11">Ты имеешь доступ к личным данным пользователя: его текущему местоположению, списку поездок, </string>
+    <string name="text_auto_12">сохранённым точкам на карте, заметкам и рейтингам.\n\n</string>
+    <string name="text_auto_13">ВАЖНЫЕ ПРАВИЛА:\n</string>
+    <string name="text_auto_14">1. ИСПОЛЬЗУЙ ЛИЧНЫЕ ДАННЫЕ ТОЛЬКО ТОГДА, КОГДА ЭТО УМЕСТНО. </string>
+    <string name="text_auto_15">На вопросы о погоде, местоположении, \'что рядом\', \'где я\' отвечай, используя координаты пользователя.\n2. Не перечисляй все сохранённые точки без прямого запроса.\n3. Если пользователь спрашивает \'какая погода\', опирайся на данные о погоде, если они предоставлены.\n4. На вопрос \'где я\' называй координаты и, если известно, ближайший ориентир из сохранённых точек.\n\n</string>
+    <string name="text_auto_19">Личные данные пользователя (конфиденциально):\n</string>
+    <string name="text_auto_20">Данные о погоде: </string>
+    <string name="text_auto_21">Текущие лимиты OpenRouter: запросов осталось %d, сброс %s, токенов %d.\n</string>
+    <string name="text_auto_22">неизвестно</string>
+    <string name="text_auto_23">Лимиты запросов ещё не загружены.\n</string>
+    <string name="text_auto_24">\nПользователь: </string>
+    <string name="text_auto_25">Нет данных.</string>
+    <string name="text_auto_26">Текущее местоположение: широта=%.6f, долгота=%.6f\n</string>
+    <string name="text_auto_27">Местоположение неизвестно.\n</string>
+    <string name="text_auto_28">\n=== ПОЕЗДКИ ===\n</string>
+    <string name="text_auto_29"> (локаций: </string>
+    <string name="text_auto_30">, точек пути: </string>
+    <string name="text_auto_31">\n=== АКТИВНАЯ ПОЕЗДКА: </string>
+    <string name="text_auto_32">Сохранённые точки:\n</string>
+    <string name="text_auto_33">Без названия</string>
+    <string name="text_auto_34"> [уровень </string>
+    <string name="text_auto_35"> координаты: </string>
+    <string name="text_auto_36">, заметка: \&quot;</string>
+    <string name="text_auto_37">, дата: </string>
+    <string name="text_auto_38">, рейтинг: </string>
+    <string name="text_auto_39"> фото: </string>
+    <string name="text_auto_40">Маршрут (точек: </string>
+    <string name="text_auto_41">от %.5f,%.5f до %.5f,%.5f\n</string>
+    <string name="text_auto_42">погод</string>
+    <string name="text_auto_43">температур</string>
+    <string name="text_auto_44">градус</string>
+    <string name="text_auto_45">дожд</string>
+    <string name="text_auto_46">ветер</string>
+    <string name="text_auto_47">влажн</string>
+    <string name="text_auto_48">Местоположение неизвестно, погода недоступна.</string>
+    <string name="text_auto_49">Погода в вашей локации: %.0f°C, ветер %.1f км/ч, %s.</string>
+    <string name="text_auto_50">Не удалось получить погоду.</string>
+    <string name="text_auto_51">Ошибка получения погоды.</string>
+    <string name="text_auto_52">ясно</string>
+    <string name="text_auto_53">облачно</string>
+    <string name="text_auto_54">туман</string>
+    <string name="text_auto_55">морось</string>
+    <string name="text_auto_56">дождь</string>
+    <string name="text_auto_57">снег</string>
+    <string name="text_auto_58">ливень</string>
+    <string name="text_auto_59">снегопад</string>
+    <string name="text_auto_60"> гроза</string>
+    <string name="text_auto_61">Ошибка: </string>
+    <string name="text_auto_62">Ошибка HTTP </string>
+    <string name="text_auto_63">Ошибка сети: </string>
+    <string name="text_auto_64">Не удалось обработать ответ</string>
+    <string name="text_auto_65">Войдите в аккаунт</string>
+    <string name="text_auto_66">Войдите, чтобы сохранить аватар в облаке</string>
+    <string name="text_auto_67">Ошибка Cloudinary: </string>
+    <string name="text_auto_68">Стиль обновлен!</string>
+    <string name="text_auto_69">Жираф</string>
+    <string name="text_auto_70">Пароль должен быть не менее 6 символов</string>
+    <string name="text_auto_71">Пароль слишком короткий!</string>
+    <string name="text_auto_72">Профиль и пароль успешно обновлены!</string>
+    <string name="text_auto_73">Ошибка обновления пароля: </string>
+    <string name="text_auto_74">Данные обновлены!</string>
+    <string name="text_auto_75">Ошибка Firestore: </string>
+    <string name="text_auto_76">Заполни все поля</string>
+    <string name="text_auto_77">Ник занят. Попробуй: </string>
+    <string name="text_auto_78">Почта занята</string>
+    <string name="text_auto_79">Когда видишь LatLng, просто запиши lat и lon</string>
+    <string name="text_auto_80">Стекло</string>
+    <string name="text_auto_81">Грань стекла</string>
+    <string name="text_auto_82">Жидкая капля</string>
+    <string name="text_auto_83">Карта</string>
+    <string name="text_auto_84">Ии</string>
+    <string name="text_auto_85">Резиновый</string>
+    <string name="text_auto_86">Заполните все поля</string>
+    <string name="text_auto_87">Нашел email для ника: </string>
+    <string name="text_auto_88">В базе у этого ника нет почты!</string>
+    <string name="text_auto_89">Ник \'</string>
+    <string name="text_auto_90">\' не найден в БД</string>
+    <string name="text_auto_91">\' не зарегистрирован</string>
+    <string name="text_auto_92">Ошибка БД: </string>
+    <string name="text_auto_93">Неверный пароль. Попробуйте еще раз</string>
+    <string name="text_auto_94">люкс</string>
+    <string name="text_auto_95">Проверьте пароль</string>
+    <string name="text_auto_96">Безопасность OzTrip: </string>
+    <string name="text_auto_97">Новый вход</string>
+    <string name="text_auto_98">Регистрация</string>
+    <string name="text_auto_99">Внимание! В ваш аккаунт OzTrip вошли в </string>
+    <string name="text_auto_100">Если это были не вы — заблокируйте доступ.</string>
+    <string name="text_auto_101">Письмо успешно отправлено на: </string>
+    <string name="text_auto_102">ОШИБКА ОТПРАВКИ: </string>
+    <string name="text_auto_103">Баз</string>
+    <string name="text_auto_104">Моя Поездка</string>
+    <string name="text_auto_105">указатель</string>
+    <string name="text_auto_106">обнимая</string>
+    <string name="text_auto_107">Захват</string>
+    <string name="text_auto_108">Критическая ошибка: </string>
+    <string name="text_auto_109">Моя поездка</string>
+    <string name="text_auto_110">Загружены локальные данные</string>
+    <string name="text_auto_111">Ошибка сохранения: </string>
+    <string name="text_auto_112">прыгал</string>
+    <string name="text_auto_113">Точка на карте</string>
+    <string name="text_auto_114">Точка удалена</string>
+    <string name="text_auto_115">Фото </string>
+    <string name="text_auto_116"> | существует: </string>
+    <string name="text_auto_117">Удалить фото</string>
+    <string name="text_auto_118">Вы уверены, что хотите удалить это фото?</string>
+    <string name="text_auto_119">Удалить</string>
+    <string name="text_auto_120">Фото удалено</string>
+    <string name="text_auto_121">Отмена</string>
+    <string name="text_auto_122">Файл не найден</string>
+    <string name="text_auto_123">05 апреля 2026</string>
+    <string name="text_auto_124">Изменить название</string>
+    <string name="text_auto_125">Сохранить</string>
+    <string name="text_auto_126">Не удалось сохранить фото</string>
+    <string name="text_auto_127">Неизвестное место</string>
+    <string name="text_auto_128">ПЛАНЕТА ЗЕМЛЯ</string>
+    <string name="text_auto_129">Ошибка поиска</string>
+    <string name="text_auto_130">Нажат плюсик, текущий размер allLists: </string>
+    <string name="text_auto_131">Поездка </string>
+    <string name="text_auto_132">После добавления, размер allLists: </string>
+    <string name="text_auto_133">notifyItemInserted для индекса </string>
+    <string name="text_auto_134">Например: Ереван, ул. Абовяна</string>
+    <string name="text_auto_135">Найти</string>
+    <string name="text_auto_136">Введите название места</string>
+    <string name="text_auto_137">Поиск Вас...</string>
+    <string name="text_auto_138">Поиск спутников...</string>
+    <string name="text_auto_139">Возврат домой</string>
+    <string name="text_auto_140">ОСТЫВАНИЯ</string>
+    <string name="text_auto_141">остыла</string>
+    <string name="text_auto_142">Метка скрыта</string>
+    <string name="text_auto_143">АКТИВАЦИИ</string>
+    <string name="text_auto_144">Метка включена</string>
+    <string name="text_auto_145">Ошибка копирования</string>
+    <string name="text_auto_146">Вы уверены, что хотите удалить \&quot;</string>
+    <string name="text_auto_147">\&quot;? Все точки и фотографии будут удалены безвозвратно.</string>
+    <string name="text_auto_148">Поездка удалена</string>
+    <string name="text_auto_149">Объект</string>
+    <string name="text_auto_150">Город / Район</string>
+    <string name="text_auto_151">Деревня / Село</string>
+    <string name="text_auto_152">Природная зона</string>
+    <string name="text_auto_153">Горная вершина</string>
+    <string name="text_auto_154">Водный объект</string>
+    <string name="text_auto_155">Историческое место</string>
+    <string name="text_auto_156">Место не найдено. Попробуйте уточнить запрос.</string>
+    <string name="text_auto_157">Ошибка сети: проверьте интернет</string>
+    <string name="text_auto_158">Данные сохранены! Размер списка: </string>
+    <string name="text_auto_159">Поездка 1</string>
+    <string name="text_auto_160">Ник занят</string>
+    <string name="text_auto_161">Введите почту</string>
+    <string name="text_auto_162">Пароль должен быть от 6 символов</string>
+    <string name="text_auto_163">Этот Email уже занят!</string>
+    <string name="text_auto_164">Пароль слишком простой</string>
+    <string name="text_auto_165">Ошибка связи с сервером</string>
+    <string name="text_auto_166">Выйти из гостевого режима</string>
+    <string name="text_auto_167">Привет, Гость!</string>
+    <string name="text_auto_168">Выйти из аккаунта</string>
+    <string name="text_auto_169">Км</string>
+    <string name="text_auto_170">Мили</string>
+    <string name="text_auto_171">Километры</string>
+    <string name="text_auto_172">Единицы измерения</string>
+    <string name="text_auto_173">Язык</string>
+    <string name="text_auto_174">Выберите язык</string>
+    <string name="text_auto_175">Версия 1.0\nПомощник для путешествий по Армении.\nРазработчик: Ваше имя.</string>
+    <string name="text_auto_176">Привет, </string>
+    <string name="text_auto_177">Привет!</string>
+    <string name="text_auto_178">Ошибка загрузки</string>
+    <string name="text_auto_179">Введите пароль</string>
+    <string name="text_auto_180">Неверный пароль</string>
+    <string name="text_auto_181">0 выбрано</string>
+    <string name="text_auto_182">Вы уверены, что хотите удалить </string>
+    <string name="text_auto_183"> поездок? Все точки и фото будут безвозвратно удалены.</string>
+    <string name="text_auto_184">Удалено </string>
+    <string name="text_auto_185"> поездок</string>
+    <string name="text_auto_186"> выбрано</string>
 </resources>

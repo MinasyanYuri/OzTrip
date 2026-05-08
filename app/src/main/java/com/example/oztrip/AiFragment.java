@@ -70,7 +70,7 @@ public class AiFragment extends Fragment {
         chatRecyclerView.setAdapter(chatAdapter);
 
         // Приветствие
-        chatAdapter.addMessage(new ChatMessage("Привет! Я OzTrip AI. Теперь я знаю всё о твоих поездках. Спрашивай!", false));
+        chatAdapter.addMessage(new ChatMessage(getString(R.string.text_auto_1), false));
 
         sendButton.setOnClickListener(v -> sendMessage());
         messageInput.setOnEditorActionListener((v, actionId, event) -> {
@@ -87,9 +87,9 @@ public class AiFragment extends Fragment {
     /** Определяет, запрашивает ли пользователь свои персональные данные */
     private boolean isDataRequest(String message) {
         String lower = message.toLowerCase();
-        return lower.contains("мои") || lower.contains("поездки") || lower.contains("точки")
-                || lower.contains("маршрут") || lower.contains("данные") || lower.contains("где я")
-                || lower.contains("рядом") || lower.contains("сохранённые");
+        return lower.contains(getString(R.string.text_auto_2)) || lower.contains(getString(R.string.text_auto_3)) || lower.contains(getString(R.string.text_auto_4))
+                || lower.contains(getString(R.string.text_auto_5)) || lower.contains(getString(R.string.text_auto_6)) || lower.contains(getString(R.string.text_auto_7))
+                || lower.contains(getString(R.string.text_auto_8)) || lower.contains(getString(R.string.text_auto_9));
     }
     public void clearCachedContext() {
         cachedContext = null;
@@ -115,34 +115,31 @@ public class AiFragment extends Fragment {
 
             // Системный промпт (как выше)
             String systemPrompt =
-                    "Ты — OzTrip AI, персональный гид по Армении и ассистент путешественника.\n" +
-                            "Ты имеешь доступ к личным данным пользователя: его текущему местоположению, списку поездок, " +
-                            "сохранённым точкам на карте, заметкам и рейтингам.\n\n" +
-                            "ВАЖНЫЕ ПРАВИЛА:\n" +
-                            "1. ИСПОЛЬЗУЙ ЛИЧНЫЕ ДАННЫЕ ТОЛЬКО ТОГДА, КОГДА ЭТО УМЕСТНО. " +
-                            "На вопросы о погоде, местоположении, 'что рядом', 'где я' отвечай, используя координаты пользователя.\n" +
-                            "2. Не перечисляй все сохранённые точки без прямого запроса.\n" +
-                            "3. Если пользователь спрашивает 'какая погода', опирайся на данные о погоде, если они предоставлены.\n" +
-                            "4. На вопрос 'где я' называй координаты и, если известно, ближайший ориентир из сохранённых точек.\n\n";
+                    getString(R.string.text_auto_10) +
+                            getString(R.string.text_auto_11) +
+                            getString(R.string.text_auto_12) +
+                            getString(R.string.text_auto_13) +
+                            getString(R.string.text_auto_14) +
+                            getString(R.string.text_auto_15);
 
             if (!cachedContext.isEmpty()) {
-                systemPrompt += "Личные данные пользователя (конфиденциально):\n" + cachedContext + "\n";
+                systemPrompt += getString(R.string.text_auto_19) + cachedContext + "\n";
             }
 
             // Добавляем погоду, если она была получена
             if (cachedWeather != null) {
-                systemPrompt += "Данные о погоде: " + cachedWeather + "\n";
+                systemPrompt += getString(R.string.text_auto_20) + cachedWeather + "\n";
             }
 
             // Информация о лимитах
             if (remainingRequests >= 0) {
-                systemPrompt += String.format("Текущие лимиты OpenRouter: запросов осталось %d, сброс %s, токенов %d.\n",
-                        remainingRequests, resetTime != null ? resetTime : "неизвестно", remainingTokens);
+                systemPrompt += String.format(getString(R.string.text_auto_21),
+                        remainingRequests, resetTime != null ? resetTime : getString(R.string.text_auto_22), remainingTokens);
             } else {
-                systemPrompt += "Лимиты запросов ещё не загружены.\n";
+                systemPrompt += getString(R.string.text_auto_23);
             }
 
-            String fullUserMessage = systemPrompt + "\nПользователь: " + text;
+            String fullUserMessage = systemPrompt + getString(R.string.text_auto_24) + text;
             fetchAIResponse(fullUserMessage);
         });
     }
@@ -152,7 +149,7 @@ public class AiFragment extends Fragment {
      */
     private String buildFullContext() {
         MainActivity activity = (MainActivity) getActivity();
-        if (activity == null) return "Нет данных.";
+        if (activity == null) return getString(R.string.text_auto_25);
 
         StringBuilder ctx = new StringBuilder();
 
@@ -160,53 +157,53 @@ public class AiFragment extends Fragment {
         Location loc = activity.getCurrentLocation();
         if (loc != null) {
             ctx.append(String.format(Locale.US,
-                    "Текущее местоположение: широта=%.6f, долгота=%.6f\n",
+                    getString(R.string.text_auto_26),
                     loc.getLatitude(), loc.getLongitude()));
         } else {
-            ctx.append("Местоположение неизвестно.\n");
+            ctx.append(getString(R.string.text_auto_27));
         }
 
         // 2. Список поездок (веток)
         List<TravelList> allLists = activity.getAllTravelLists();
         if (allLists != null && !allLists.isEmpty()) {
-            ctx.append("\n=== ПОЕЗДКИ ===\n");
+            ctx.append(getString(R.string.text_auto_28));
             for (int i = 0; i < allLists.size(); i++) {
                 TravelList list = allLists.get(i);
                 ctx.append(i + 1).append(". ").append(list.name);
-                ctx.append(" (локаций: ").append(list.locations != null ? list.locations.size() : 0);
-                ctx.append(", точек пути: ").append(list.pathPoints != null ? list.pathPoints.size() : 0).append(")\n");
+                ctx.append(getString(R.string.text_auto_29)).append(list.locations != null ? list.locations.size() : 0);
+                ctx.append(getString(R.string.text_auto_30)).append(list.pathPoints != null ? list.pathPoints.size() : 0).append(")\n");
             }
         }
 
         // 3. Активная поездка и её точки
         TravelList active = activity.getCurrentActiveList();
         if (active != null) {
-            ctx.append("\n=== АКТИВНАЯ ПОЕЗДКА: ").append(active.name).append(" ===\n");
+            ctx.append(getString(R.string.text_auto_31)).append(active.name).append(" ===\n");
             // Точки
             List<SavedLocation> locations = active.locations;
             if (locations != null && !locations.isEmpty()) {
-                ctx.append("Сохранённые точки:\n");
+                ctx.append(getString(R.string.text_auto_32));
                 for (int i = 0; i < locations.size(); i++) {
                     SavedLocation sl = locations.get(i);
                     ctx.append("  ").append(i + 1).append(". ");
-                    ctx.append(sl.customName.isEmpty() ? "Без названия" : sl.customName);
-                    ctx.append(" [уровень ").append(sl.level).append("]");
-                    ctx.append(" координаты: ").append(String.format(Locale.US, "%.5f, %.5f", sl.latLng.getLatitude(), sl.latLng.getLongitude()));
-                    if (!sl.note.isEmpty()) ctx.append(", заметка: \"").append(sl.note).append("\"");
-                    if (sl.date != null && !sl.date.isEmpty()) ctx.append(", дата: ").append(sl.date);
-                    ctx.append(", рейтинг: ").append(sl.rating);
-                    ctx.append(" фото: ").append(sl.photoPaths != null ? sl.photoPaths.size() : 0);
+                    ctx.append(sl.customName.isEmpty() ? getString(R.string.text_auto_33) : sl.customName);
+                    ctx.append(getString(R.string.text_auto_34)).append(sl.level).append("]");
+                    ctx.append(getString(R.string.text_auto_35)).append(String.format(Locale.US, "%.5f, %.5f", sl.latLng.getLatitude(), sl.latLng.getLongitude()));
+                    if (!sl.note.isEmpty()) ctx.append(getString(R.string.text_auto_36)).append(sl.note).append("\"");
+                    if (sl.date != null && !sl.date.isEmpty()) ctx.append(getString(R.string.text_auto_37)).append(sl.date);
+                    ctx.append(getString(R.string.text_auto_38)).append(sl.rating);
+                    ctx.append(getString(R.string.text_auto_39)).append(sl.photoPaths != null ? sl.photoPaths.size() : 0);
                     ctx.append("\n");
                 }
             }
             // Маршрут
             List<LatLng> path = active.pathPoints;
             if (path != null && path.size() > 1) {
-                ctx.append("Маршрут (точек: ").append(path.size()).append("): ");
+                ctx.append(getString(R.string.text_auto_40)).append(path.size()).append("): ");
                 // Первую и последнюю точку для примера
                 LatLng first = path.get(0);
                 LatLng last = path.get(path.size() - 1);
-                ctx.append(String.format(Locale.US, "от %.5f,%.5f до %.5f,%.5f\n",
+                ctx.append(String.format(Locale.US, getString(R.string.text_auto_41),
                         first.getLatitude(), first.getLongitude(),
                         last.getLatitude(), last.getLongitude()));
             }
@@ -217,8 +214,8 @@ public class AiFragment extends Fragment {
     private void fetchWeatherIfNeeded(String userMessage, Runnable onReady) {
         // Простая проверка: если пользователь упоминает погоду
         String lower = userMessage.toLowerCase();
-        if (lower.contains("погод") || lower.contains("температур") || lower.contains("градус")
-                || lower.contains("дожд") || lower.contains("ветер") || lower.contains("влажн")) {
+        if (lower.contains(getString(R.string.text_auto_42)) || lower.contains(getString(R.string.text_auto_43)) || lower.contains(getString(R.string.text_auto_44))
+                || lower.contains(getString(R.string.text_auto_45)) || lower.contains(getString(R.string.text_auto_46)) || lower.contains(getString(R.string.text_auto_47))) {
 
             MainActivity activity = (MainActivity) getActivity();
             if (activity == null) {
@@ -227,7 +224,7 @@ public class AiFragment extends Fragment {
             }
             Location loc = activity.getCurrentLocation();
             if (loc == null) {
-                cachedWeather = "Местоположение неизвестно, погода недоступна.";
+                cachedWeather = getString(R.string.text_auto_48);
                 onReady.run();
                 return;
             }
@@ -251,12 +248,12 @@ public class AiFragment extends Fragment {
                         int weatherCode = current.getInt("weathercode");
                         String desc = getWeatherDescription(weatherCode);
                         cachedWeather = String.format(Locale.US,
-                                "Погода в вашей локации: %.0f°C, ветер %.1f км/ч, %s.", temp, wind, desc);
+                                getString(R.string.text_auto_49), temp, wind, desc);
                     } else {
-                        cachedWeather = "Не удалось получить погоду.";
+                        cachedWeather = getString(R.string.text_auto_50);
                     }
                 } catch (Exception e) {
-                    cachedWeather = "Ошибка получения погоды.";
+                    cachedWeather = getString(R.string.text_auto_51);
                 }
                 mainHandler.post(onReady);
             });
@@ -267,15 +264,15 @@ public class AiFragment extends Fragment {
         }
     }
     private String getWeatherDescription(int code) {
-        if (code <= 1) return "ясно";
-        if (code <= 3) return "облачно";
-        if (code <= 48) return "туман";
-        if (code <= 57) return "морось";
-        if (code <= 67) return "дождь";
-        if (code <= 77) return "снег";
-        if (code <= 82) return "ливень";
-        if (code <= 86) return "снегопад";
-        return " гроза";
+        if (code <= 1) return getString(R.string.text_auto_52);
+        if (code <= 3) return getString(R.string.text_auto_53);
+        if (code <= 48) return getString(R.string.text_auto_54);
+        if (code <= 57) return getString(R.string.text_auto_55);
+        if (code <= 67) return getString(R.string.text_auto_56);
+        if (code <= 77) return getString(R.string.text_auto_57);
+        if (code <= 82) return getString(R.string.text_auto_58);
+        if (code <= 86) return getString(R.string.text_auto_59);
+        return getString(R.string.text_auto_60);
     }
     private void fetchAIResponse(String fullUserMessage) {
         executor.execute(() -> {
@@ -333,9 +330,9 @@ public class AiFragment extends Fragment {
                 } else {
                     try {
                         JSONObject err = new JSONObject(responseBody);
-                        aiText = "Ошибка: " + err.getJSONObject("error").optString("message", "неизвестно");
+                        aiText = getString(R.string.text_auto_61) + err.getJSONObject("error").optString("message", getString(R.string.text_auto_22));
                     } catch (Exception e) {
-                        aiText = "Ошибка HTTP " + response.code();
+                        aiText = getString(R.string.text_auto_62) + response.code();
                     }
                 }
                 String finalAiText = aiText;
@@ -347,7 +344,7 @@ public class AiFragment extends Fragment {
                 Log.e("OzTrip_AI", "Request error", e);
                 mainHandler.post(() -> {
                     if (!isAdded()) return;
-                    chatAdapter.replaceLastMessage(new ChatMessage("Ошибка сети: " + e.getMessage(), false));
+                    chatAdapter.replaceLastMessage(new ChatMessage(getString(R.string.text_auto_63) + e.getMessage(), false));
                 });
             }
         });
@@ -359,7 +356,7 @@ public class AiFragment extends Fragment {
             JSONArray choices = obj.getJSONArray("choices");
             return choices.getJSONObject(0).getJSONObject("message").getString("content");
         } catch (Exception e) {
-            return "Не удалось обработать ответ";
+            return getString(R.string.text_auto_64);
         }
     }
 

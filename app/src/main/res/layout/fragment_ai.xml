@@ -11,10 +11,10 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🤖 OzTrip AI"
+        android:text="@string/text_72"
         android:textSize="24sp"
         android:textStyle="bold"
-        android:textColor="#FFFFFF"
+        android:textColor="?colorOnPrimary"
         android:gravity="center"
         android:layout_marginBottom="8dp"/>
 
@@ -42,9 +42,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="Спроси меня о путешествии..."
+            android:hint="@string/text_73"
             android:textColorHint="#80FFFFFF"
-            android:textColor="#FFFFFF"
+            android:textColor="?colorOnPrimary"
             android:background="@android:color/transparent"
             android:padding="12dp"
             android:inputType="textMultiLine"
@@ -56,7 +56,7 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_send"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Отправить"
+            android:contentDescription="@string/text_74"
             android:padding="10dp"/>
     </LinearLayout>
 

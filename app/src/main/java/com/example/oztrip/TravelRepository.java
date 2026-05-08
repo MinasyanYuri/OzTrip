@@ -7,14 +7,22 @@ import java.util.*;
 
 public class TravelRepository {
     private final FirebaseFirestore db;
-    private final String userId;
 
     public TravelRepository() {
         db = FirebaseFirestore.getInstance();
-        userId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+    }
+
+    private String getUserId() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return null;
+        return FirebaseAuth.getInstance().getCurrentUser().getUid();
     }
 
     public void loadAllLists(OnDataLoadedListener listener) {
+        String userId = getUserId();
+        if (userId == null) {
+            if (listener != null) listener.onError("Not signed in");
+            return;
+        }
         db.collection("travel_lists")
                 .whereEqualTo("userId", userId)
                 .get()
@@ -30,7 +38,11 @@ public class TravelRepository {
     }
 
     public void saveAllLists(List<TravelList> lists, OnSaveListener listener) {
-        // Сначала удаляем все старые документы пользователя
+        String userId = getUserId();
+        if (userId == null) {
+            if (listener != null) listener.onError("Not signed in");
+            return;
+        }
         db.collection("travel_lists")
                 .whereEqualTo("userId", userId)
                 .get()
@@ -38,7 +50,6 @@ public class TravelRepository {
                     for (DocumentSnapshot doc : snapshot.getDocuments()) {
                         doc.getReference().delete();
                     }
-                    // Добавляем каждый список как отдельный документ
                     for (TravelList list : lists) {
                         Map<String, Object> data = list.toMap();
                         data.put("userId", userId);

@@ -47,7 +47,7 @@ public class AvatarEditorActivity extends AppCompatActivity {
     private ProgressBar pbLoading;
 
     private String name, username, uid;
-    private int selectedColor = Color.parseColor("#212121");
+    private int selectedColor = Color.parseColor("?android:textColorPrimary");
     private int selectedIconRes = 0;
 
     private final int[] palette = {
@@ -56,8 +56,8 @@ public class AvatarEditorActivity extends AppCompatActivity {
             Color.parseColor("#448AFF"), Color.parseColor("#40C4FF"), Color.parseColor("#18FFFF"),
             Color.parseColor("#69F0AE"), Color.parseColor("#178700"), Color.parseColor("#B2FF59"),
             Color.parseColor("#EEFF41"), Color.parseColor("#FFD740"), Color.parseColor("#FFAB40"),
-            Color.parseColor("#FF6E40"), Color.parseColor("#BDBDBD"), Color.parseColor("#757575"),
-            Color.parseColor("#212121"), Color.parseColor("#5D4037"), Color.parseColor("#8D6E63"),
+            Color.parseColor("#FF6E40"), Color.parseColor("#BDBDBD"), Color.parseColor("?android:textColorSecondary"),
+            Color.parseColor("?android:textColorPrimary"), Color.parseColor("#5D4037"), Color.parseColor("#8D6E63"),
             Color.parseColor("#FFCCBC")
     };
 
@@ -88,6 +88,12 @@ public class AvatarEditorActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_avatar_editor);
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            Toast.makeText(this, getString(R.string.text_auto_65), Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
         try {
             java.util.Map<String, String> config = new java.util.HashMap<>();
             config.put("cloud_name", "dzwqtyn5a");
@@ -97,6 +103,7 @@ public class AvatarEditorActivity extends AppCompatActivity {
         } catch (IllegalStateException e) {
             // Если MediaManager уже инициализирован, просто игнорируем
         }
+
         // Инициализация данных
         name = getIntent().getStringExtra("user_name");
         username = getIntent().getStringExtra("user_username");
@@ -169,6 +176,12 @@ public class AvatarEditorActivity extends AppCompatActivity {
     }
 
     private void uploadAllDataToFirebase() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            // Гость – просто завершаем настройку профиля без загрузки в облако
+            Toast.makeText(this, getString(R.string.text_auto_66), Toast.LENGTH_SHORT).show();
+            finishRegistration("initials", "?colorOnPrimary"); // или любой дефолтный цвет
+            return;
+        }
         if (pbLoading != null) pbLoading.setVisibility(View.VISIBLE);
 
         String hexColor = String.format("#%06X", (0xFFFFFF & selectedColor));
@@ -177,7 +190,7 @@ public class AvatarEditorActivity extends AppCompatActivity {
             // Используем Cloudinary вместо Firebase Storage
             uploadImageToCloudinary(currentImageUri);
         } else if (selectedIconRes != 0) {
-            finishRegistration(String.valueOf(selectedIconRes), "#FFFFFF");
+            finishRegistration(String.valueOf(selectedIconRes), "?colorOnPrimary");
         } else {
             finishRegistration("initials", hexColor);
         }
@@ -197,13 +210,13 @@ public class AvatarEditorActivity extends AppCompatActivity {
                     public void onSuccess(String requestId, java.util.Map resultData) {
                         // Это прямая ссылка на фото, которую мы сохраним в Firestore
                         String imageUrl = (String) resultData.get("secure_url");
-                        finishRegistration(imageUrl, "#FFFFFF");
+                        finishRegistration(imageUrl, "?colorOnPrimary");
                     }
 
                     @Override
                     public void onError(String requestId, ErrorInfo error) {
                         if (pbLoading != null) pbLoading.setVisibility(View.GONE);
-                        Toast.makeText(AvatarEditorActivity.this, "Ошибка Cloudinary: " + error.getDescription(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(AvatarEditorActivity.this, getString(R.string.text_auto_67) + error.getDescription(), Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
@@ -229,12 +242,12 @@ public class AvatarEditorActivity extends AppCompatActivity {
             FirebaseFirestore.getInstance().collection("users").document(uid)
                     .update(userUpdates) // Используем update, чтобы не затереть пароль/ник
                     .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(this, "Стиль обновлен!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.text_auto_68), Toast.LENGTH_SHORT).show();
                         finish(); // Просто закрываем этот экран и возвращаемся в профиль
                     })
                     .addOnFailureListener(e -> {
                         pbLoading.setVisibility(View.GONE);
-                        Toast.makeText(this, "Ошибка: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.text_auto_61) + e.getMessage(), Toast.LENGTH_SHORT).show();
                     });
 
         } else {

@@ -83,7 +83,7 @@ public class TravelListSheetFragment extends BottomSheetDialogFragment {
             adapter.setSelectionMode(true);
             headerLayout.setVisibility(View.GONE);
             selectionToolbar.setVisibility(View.VISIBLE);
-            tvSelectedCount.setText("0 выбрано");
+            tvSelectedCount.setText(getString(R.string.text_auto_181));
             btnDeleteSelected.setEnabled(false);
         });
 
@@ -100,7 +100,7 @@ public class TravelListSheetFragment extends BottomSheetDialogFragment {
 
             View dialogView = inflater.inflate(R.layout.dialog_confirm_delete, null);
             TextView tvMessage = dialogView.findViewById(R.id.tvConfirmMessage);
-            tvMessage.setText("Вы уверены, что хотите удалить " + selected.size() + " поездок? Все точки и фото будут безвозвратно удалены.");
+            tvMessage.setText(getString(R.string.text_auto_182) + selected.size() + getString(R.string.text_auto_183));
 
             AlertDialog confirmDialog = new AlertDialog.Builder(getActivity(), R.style.PremiumDialogTheme)
                     .setView(dialogView)
@@ -116,7 +116,7 @@ public class TravelListSheetFragment extends BottomSheetDialogFragment {
                     ((MainActivity) getActivity()).removeTravelListByIndex(idx);
                 }
 
-                Toast.makeText(getActivity(), "Удалено " + realIndices.size() + " поездок", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getActivity(), getString(R.string.text_auto_184) + realIndices.size() + getString(R.string.text_auto_185), Toast.LENGTH_SHORT).show();
 
                 // Закрываем диалог
                 confirmDialog.dismiss();
@@ -179,7 +179,7 @@ public class TravelListSheetFragment extends BottomSheetDialogFragment {
                 // Включаем режим выбора – скрываем заголовок, показываем панель
                 headerLayout.setVisibility(View.GONE);
                 selectionToolbar.setVisibility(View.VISIBLE);
-                tvSelectedCount.setText("0 выбрано");
+                tvSelectedCount.setText(getString(R.string.text_auto_181));
                 btnDeleteSelected.setEnabled(false);
             } else {
                 // Выключаем режим – возвращаем заголовок, скрываем панель
@@ -188,7 +188,7 @@ public class TravelListSheetFragment extends BottomSheetDialogFragment {
             }
         });
         adapter.setSelectionChangeListener(count -> {
-            tvSelectedCount.setText(count + " выбрано");
+            tvSelectedCount.setText(count + getString(R.string.text_auto_186));
             btnDeleteSelected.setEnabled(count > 0);
         });
 

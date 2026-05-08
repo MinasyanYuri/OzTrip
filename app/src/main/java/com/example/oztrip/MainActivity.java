@@ -3,10 +3,13 @@ package com.example.oztrip;
 import android.content.Intent;
 
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.SpannableString;
@@ -78,12 +81,17 @@ import java.util.List;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
+import java.util.Locale;
+
 import android.content.SharedPreferences;
 import android.content.Context;
 
 public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
+
+    private boolean isFirstResume = true;
     private LiquidSegmentedControl liquidNav;
     private View infoCard;
+    private String currentLanguage;
     private View mapContainer, btnSaveLocation, topPanel, centerMarker, sideButtons;
     private FrameLayout mapContentContainer, aiContainer;
     private TravelRepository travelRepository;
@@ -97,7 +105,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // Список всех сохраненных точек (баз)
 // Удаляем: private java.util.List<Feature> savedFeatures = new java.util.ArrayList<>();
     private SavedLocation currentlyEditingLocation;
-    // Добавляем: Список уникальных "Баз" с уровнями
+    // Добавляем: Список уникальных getString(R.string.text_auto_103) с уровнями
     private java.util.List<SavedLocation> uniqueLocations = new java.util.ArrayList<>();
     private static final String SAVED_POINTS_SOURCE = "saved-points-source";
     private static final String SAVED_POINTS_LAYER = "saved-points-layer";
@@ -260,13 +268,20 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
 
         if (allLists.isEmpty()) {
-            TravelList defaultList = new TravelList("Моя Поездка");
+            TravelList defaultList = new TravelList(getString(R.string.text_auto_104));
 
             allLists.add(defaultList);
             currentActiveList = defaultList;
         }
         try {
             MapLibre.getInstance(this);
+            // Принудительно применяем сохранённый язык
+            // 1. Применяем язык ДО всего
+            SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+            String lang = prefs.getString("language", "ru");
+            setLocale(lang);
+            currentLanguage = lang;
+
             setContentView(R.layout.activity_main);
 // Собираем все View, которые должны быть видны только на вкладке Карта
             // ======== Инициализация View и BottomSheet =========
@@ -274,11 +289,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
 
             // ======== Добавляем AiFragment =========
-            if (savedInstanceState == null) {
-                getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.aiContainer, new AiFragment())
-                        .commit();
-            }
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.aiContainer, new AiFragment())
+                    .commit();
 
 // Группы View, которые относятся к карте
             mapContainer = findViewById(R.id.mapContainer);
@@ -301,6 +314,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             setupBottomSheetCallbacks(); // <-- один раз здесь
 // Переключение вкладок
             liquidNav = findViewById(R.id.liquid_nav);
+            boolean isDark = (getResources().getConfiguration().uiMode
+                    & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+            liquidNav.setDarkMode(isDark);
             if (liquidNav != null) {
                 liquidNav.setOnTabSelectedListener(index -> {
                     if (mapView != null) {
@@ -387,14 +403,18 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
             // Проверяем, залогинен ли пользователь
             FirebaseAuth auth = FirebaseAuth.getInstance();
-            if (auth.getCurrentUser() == null) {
-                // Перенаправляем на LoginActivity
+            boolean isGuest = getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                    .getBoolean("guest_mode", false);
+
+            if (auth.getCurrentUser() == null && !isGuest) {
                 startActivity(new Intent(this, LoginActivity.class));
                 finish();
                 return;
             }
-            travelRepository = new TravelRepository();
-            loadTravelDataFromCloud();
+            if (auth.getCurrentUser() != null) {
+                travelRepository = new TravelRepository();
+            }
+            loadTravelDataFromCloud();   // внутри уже есть проверка на пользователя
             setupButtons();
 
             if (mapView != null) {
@@ -405,7 +425,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                         // НИЧЕГО НЕ ДЕЛАЕМ. Карта сама всё помнит: и ветки, и границы.
                         return;
                     }
-                    String styleUrl = "https://tiles.openfreemap.org/styles/liberty";
+
+                    String styleUrl = isDark
+                            ? "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+                            : "https://tiles.openfreemap.org/styles/liberty";
                     map.setStyle(styleUrl, style -> {
                         // Скрываем UI элементы
                         map.getUiSettings().setCompassEnabled(false);
@@ -442,7 +465,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 // СЛУШАТЕЛЬ ДЛИННОГО НАЖАТИЯ
                     map.addOnMapLongClickListener(point -> {
                         findViewById(android.R.id.content).performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
-                        // 1. Показываем визуальный "указатель" (пин) на карте
+                        // 1. Показываем визуальный getString(R.string.text_auto_105) (пин) на карте
                         showMarkerAt(point.getLatitude(), point.getLongitude());
 
                         // 2. Запускаем поиск данных (тот метод, что мы создали ранее)
@@ -521,7 +544,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
                                 // --- ЭФФЕКТ СЛИЯНИЯ ---
 
-                                // А. Метка немного сжимается, "обнимая" точку пользователя
+                                // А. Метка немного сжимается, getString(R.string.text_auto_106) точку пользователя
                                 float scale = 1.0f - (fusionFactor * 0.15f); // Сжатие до 85%
                                 centerMarker.setScaleX(scale);
                                 centerMarker.setScaleY(scale);
@@ -561,7 +584,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                                 // Магнитим камеру прямо в центр объекта
                                 mapLibre.easeCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLng(loc.latLng), 100);
 
-                                // Вибрация "Захват"
+                                // Вибрация getString(R.string.text_auto_107)
                                 findViewById(android.R.id.content).performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
                                 break;
                             }
@@ -573,8 +596,27 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             }
         } catch (Exception e) {
             // Если что-то пойдет совсем не так, мы увидим текст ошибки вместо простого вылета
-            Toast.makeText(this, "Критическая ошибка: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.text_auto_108) + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void setLocale(String lang) {
+        Locale locale = new Locale(lang);
+        Locale.setDefault(locale);
+        Resources res = getResources();
+        Configuration config = res.getConfiguration();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            config.setLocale(locale);
+        } else {
+            config.locale = locale;
+        }
+        res.updateConfiguration(config, res.getDisplayMetrics());
+    }
+
+    private String getStorageKey() {
+        boolean isGuest = getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                .getBoolean("guest_mode", false);
+        return isGuest ? "guest_travels" : "saved_travels";
     }
 
     private void animateSlideInLeft(View view, float screenWidth, int duration) {
@@ -625,16 +667,30 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         sheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
             @Override
             public void onStateChanged(@NonNull View bottomSheet, int newState) {
-                if (newState == BottomSheetBehavior.STATE_COLLAPSED || newState == BottomSheetBehavior.STATE_EXPANDED) {
-                    //findViewById(R.id.btnSaveLocation).setEnabled(false);
+                if (newState == BottomSheetBehavior.STATE_COLLAPSED || newState == BottomSheetBehavior.STATE_HIDDEN) {
                     findViewById(R.id.btnSaveLocation).setEnabled(true);
                 } else {
                     findViewById(R.id.btnSaveLocation).setEnabled(true);
                 }
+
+                // 🔥 Разрешаем карте принимать жесты, когда BottomSheet свёрнут
+                if (infoCard != null) {
+                    if (newState == BottomSheetBehavior.STATE_COLLAPSED) {
+                        // В свёрнутом виде – делаем некликабельной, чтобы карта получала жесты
+                        infoCard.setClickable(false);
+                        infoCard.setFocusable(false);
+                    } else {
+                        // В развёрнутом или скрытом состоянии – можно кликать
+                        infoCard.setClickable(true);
+                        infoCard.setFocusable(true);
+                    }
+                }
+
                 if (mapLibre != null) {
-                    boolean gesturesEnabled = (newState == BottomSheetBehavior.STATE_HIDDEN);
+                    boolean gesturesEnabled = (newState != BottomSheetBehavior.STATE_EXPANDED);
                     mapLibre.getUiSettings().setAllGesturesEnabled(gesturesEnabled);
                 }
+
                 if (liquidNav != null) {
                     liquidNav.setEnabled(newState == BottomSheetBehavior.STATE_HIDDEN);
                 }
@@ -679,6 +735,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
     }
     private void loadTravelDataFromCloud() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            // Гость – просто загружаем локальные данные, не лезем в облако
+            loadLocalBackup();
+            isDataLoaded = true;
+            return;
+        }
         travelRepository.loadAllLists(new TravelRepository.OnDataLoadedListener() {
             @Override
             public void onLoaded(List<TravelList> lists) {
@@ -691,7 +753,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     Collections.sort(allLists, (a, b) -> a.name.compareToIgnoreCase(b.name));
                 } else {
                     allLists.clear();
-                    allLists.add(new TravelList("Моя поездка"));
+                    allLists.add(new TravelList(getString(R.string.text_auto_109)));
                     syncAllDataToCloud();
                 }
                 currentActiveList = allLists.get(0);
@@ -739,7 +801,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if (listAdapter != null) listAdapter.notifyDataSetChanged();
             isDataLoaded = true;
             refreshSavedPoints();
-            Toast.makeText(this, "Загружены локальные данные", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.text_auto_110), Toast.LENGTH_SHORT).show();
             // При первой возможности сохраним их в облако
             if (travelRepository != null) {
                 syncAllDataToCloud();
@@ -747,6 +809,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
     }
     private void syncAllDataToCloud() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
         if (!isDataLoaded) return; // ещё не загрузились, не надо сохранять
         travelRepository.saveAllLists(allLists, new TravelRepository.OnSaveListener() {
             @Override
@@ -755,8 +818,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             }
             @Override
             public void onError(String error) {
-                Log.e("Firestore", "Ошибка сохранения: " + error);
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Ошибка: " + error, Toast.LENGTH_LONG).show());
+                Log.e("Firestore", getString(R.string.text_auto_111) + error);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, getString(R.string.text_auto_61) + error, Toast.LENGTH_LONG).show());
             }
         });
     }
@@ -793,7 +856,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
             rvTravelLists.setAdapter(listAdapter);
 
-            // Чтобы список не "прыгал"
+            // Чтобы список не getString(R.string.text_auto_112)
             //rvTravelLists.setHasFixedSize(true);
         }
     }
@@ -873,7 +936,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         TextView tvDateDisplay = view.findViewById(R.id.tvDateDisplay);
 
         // Заголовок
-        titleView.setText(loc.customName.isEmpty() ? "Точка на карте" : loc.customName);
+        titleView.setText(loc.customName.isEmpty() ? getString(R.string.text_auto_113) : loc.customName);
         btnEdit.setOnClickListener(v -> showNameEditDialog(loc, titleView));
 
         Button btnDeleteLocation = view.findViewById(R.id.btnDeleteLocation);
@@ -960,7 +1023,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 deleteDialog.dismiss();
                 dialog.dismiss();
 
-                Toast.makeText(this, "Точка удалена", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.text_auto_114), Toast.LENGTH_SHORT).show();
             });
 
             dialogView.findViewById(R.id.btnCancelDelete).setOnClickListener(deleteView -> deleteDialog.dismiss());
@@ -987,7 +1050,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             final int photoIndex = i;
             String photoPath = loc.photoPaths.get(i);
             File file = new File(photoPath);
-            Log.d("Photo", "Фото " + i + ": " + photoPath + " | существует: " + file.exists());
+            Log.d("Photo", getString(R.string.text_auto_115) + i + ": " + photoPath + getString(R.string.text_auto_116) + file.exists());
             if (!file.exists()) continue;
 
             // Карточка фото
@@ -1025,7 +1088,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
             bg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
             bg.setColor(Color.parseColor("#CCFF5252"));
-            bg.setStroke((int) dpToPx(1.5f), Color.parseColor("#FFFFFF"));
             btnDelete.setBackground(bg);
             btnDelete.setPadding((int) dpToPx(6), (int) dpToPx(6), (int) dpToPx(6), (int) dpToPx(6));
             btnDelete.setClickable(true);
@@ -1033,9 +1095,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
             btnDelete.setOnClickListener(v -> {
                 new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
-                        .setTitle("Удалить фото")
-                        .setMessage("Вы уверены, что хотите удалить это фото?")
-                        .setPositiveButton("Удалить", (dialog, which) -> {
+                        .setTitle(getString(R.string.text_auto_117))
+                        .setMessage(getString(R.string.text_auto_118))
+                        .setPositiveButton(getString(R.string.text_auto_119), (dialog, which) -> {
                             // 1. Удаляем физический файл с телефона
                             File photoFile = new File(photoPath);
                             if (photoFile.exists()) {
@@ -1055,9 +1117,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                             syncAllDataToCloud();
 
                             v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                            Toast.makeText(this, "Фото удалено", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, getString(R.string.text_auto_120), Toast.LENGTH_SHORT).show();
                         })
-                        .setNegativeButton("Отмена", null)
+                        .setNegativeButton(getString(R.string.text_auto_121), null)
                         .show();
             });
 
@@ -1069,7 +1131,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void showFullscreenPhoto(String photoPath) {
         File file = new File(photoPath);
         if (!file.exists()) {
-            Toast.makeText(this, "Файл не найден", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.text_auto_122), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -1114,7 +1176,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     java.util.Calendar selectedCal = java.util.Calendar.getInstance();
                     selectedCal.set(selectedYear, monthOfYear, dayOfMonth);
 
-                    // "dd MMMM yyyy" превратит дату в "05 апреля 2026"
+                    // "dd MMMM yyyy" превратит дату в getString(R.string.text_auto_123)
                     java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd MMMM yyyy", java.util.Locale.getDefault());
                     String formattedDate = sdf.format(selectedCal.getTime());
 
@@ -1141,9 +1203,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         input.setPadding(padding, padding, padding, padding);
 
         new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Изменить название")
+                .setTitle(getString(R.string.text_auto_124))
                 .setView(input)
-                .setPositiveButton("Сохранить", (d, which) -> {
+                .setPositiveButton(getString(R.string.text_auto_125), (d, which) -> {
                     String newName = input.getText().toString().trim();
                     if (!newName.isEmpty()) {
                         loc.customName = newName;
@@ -1160,7 +1222,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                         imm.hideSoftInputFromWindow(input.getWindowToken(), 0);
                     }
                 })
-                .setNegativeButton("Отмена", null)
+                .setNegativeButton(getString(R.string.text_auto_121), null)
                 .show();
     }
 
@@ -1190,7 +1252,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                             refreshSavedPoints();
                             showLocationCard(currentlyEditingLocation);
                         } else {
-                            Toast.makeText(this, "Не удалось сохранить фото", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, getString(R.string.text_auto_126), Toast.LENGTH_SHORT).show();
                         }
                     }
                 }
@@ -1238,7 +1300,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
         }
 
-        // Сбрасываем положение кнопки "Сохранить"
+        // Сбрасываем положение кнопки getString(R.string.text_auto_125)
         View saveBtn = findViewById(R.id.btnSaveLocation);
         if (saveBtn != null) {
             saveBtn.animate().translationY(0).setDuration(300).start();
@@ -1303,7 +1365,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 in.close();
 
                 JSONObject result = new JSONObject(res.toString());
-                String displayName = result.optString("display_name", "Неизвестное место");
+                String displayName = result.optString("display_name", getString(R.string.text_auto_127));
                 String shortName = displayName.split(",")[0];
                 String type = result.optString("type", "point"); // ТИП ТУТ
                 JSONObject geojson = result.optJSONObject("geojson");
@@ -1320,7 +1382,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 1200);
 
                     // 2. Определяем типы для карточки
-                    String displayType = "Точка на карте";
+                    String displayType = getString(R.string.text_auto_113);
                     // Внутри reverseSearch -> runOnUiThread
                     JSONObject address = result.optJSONObject("address");
                     String city = "";
@@ -1337,7 +1399,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     if (!city.isEmpty()) {
                         locationInfo = city + ", " + country;
                     }
-                    if (locationInfo.isEmpty()) locationInfo = "ПЛАНЕТА ЗЕМЛЯ";
+                    if (locationInfo.isEmpty()) locationInfo = getString(R.string.text_auto_128);
 
 
                     // Вызываем карточку (передаем locationInfo в параметр floraType)
@@ -1368,7 +1430,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
             } catch (Exception e) {
                 e.printStackTrace();
-                runOnUiThread(() -> Toast.makeText(this, "Ошибка поиска", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_129), Toast.LENGTH_SHORT).show());
             }
         }).start();
     }
@@ -1378,14 +1440,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
 // Кнопка ПЛЮСИК (btnAddList)
         findViewById(R.id.btnAddList).setOnClickListener(v -> {
-            Log.d("OzTrip1", "Нажат плюсик, текущий размер allLists: " + allLists.size());
-            TravelList newList = new TravelList("Поездка " + (allLists.size() + 1));
+            Log.d("OzTrip1", getString(R.string.text_auto_130) + allLists.size());
+            TravelList newList = new TravelList(getString(R.string.text_auto_131) + (allLists.size() + 1));
             allLists.add(newList);
-            Log.d("OzTrip1", "После добавления, размер allLists: " + allLists.size());
+            Log.d("OzTrip1", getString(R.string.text_auto_132) + allLists.size());
 
             int newIndex = allLists.size() - 1;
             listAdapter.notifyItemInserted(newIndex);
-            Log.d("OzTrip1", "notifyItemInserted для индекса " + newIndex);
+            Log.d("OzTrip1", getString(R.string.text_auto_133) + newIndex);
 
             rvTravelLists.smoothScrollToPosition(newIndex);
 
@@ -1407,7 +1469,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             btnSearch.setOnClickListener(v -> {
                 View dialogView = getLayoutInflater().inflate(R.layout.dialog_search, null);
                 EditText etQuery = dialogView.findViewById(R.id.etSearchQuery);
-                String hintText = "Например: Ереван, ул. Абовяна";
+                String hintText = getString(R.string.text_auto_134);
                 SpannableString ss = new SpannableString(hintText);
                 AbsoluteSizeSpan sizeSpan = new AbsoluteSizeSpan(14, true); // размер в sp
                 ss.setSpan(sizeSpan, 0, ss.length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
@@ -1417,18 +1479,18 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                         .setView(dialogView)
                         .create();
 
-                // Кнопка "Найти"
+                // Кнопка getString(R.string.text_auto_135)
                 dialogView.findViewById(R.id.btnStartSearch).setOnClickListener(view -> {
                     String query = etQuery.getText().toString().trim();
                     if (!query.isEmpty()) {
                         searchDialog.dismiss();
                         searchLocation(query);
                     } else {
-                        Toast.makeText(this, "Введите название места", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.text_auto_136), Toast.LENGTH_SHORT).show();
                     }
                 });
 
-                // Кнопка "Отмена"
+                // Кнопка getString(R.string.text_auto_121)
                 dialogView.findViewById(R.id.btnCancelSearch).setOnClickListener(view -> searchDialog.dismiss());
 
                 // Поиск по нажатию Enter на клавиатуре
@@ -1439,7 +1501,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                             searchDialog.dismiss();
                             searchLocation(query);
                         } else {
-                            Toast.makeText(this, "Введите название места", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, getString(R.string.text_auto_136), Toast.LENGTH_SHORT).show();
                         }
                         return true;
                     }
@@ -1527,9 +1589,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
                     mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 2000);
 
-                    Toast.makeText(this, "Поиск Вас...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.text_auto_137), Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(this, "Поиск спутников...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.text_auto_138), Toast.LENGTH_SHORT).show();
                 }
             });
         }
@@ -1558,7 +1620,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
                     mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(position), 2000);
 
-                    Toast.makeText(this, "Возврат домой", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.text_auto_139), Toast.LENGTH_SHORT).show();
                 }
             });
         }
@@ -1578,6 +1640,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             // Очищаем фильтры, ставим открытый глаз, кнопка яркая
             imgToggle.setImageResource(R.drawable.ic_btn_eye_open);
             imgToggle.clearColorFilter();
+            imgToggle.setColorFilter(Color.parseColor("#757575"));
             imgToggle.setAlpha(1.0f);
 
 
@@ -1592,14 +1655,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                             .setDuration(200)
                             .withEndAction(() -> centerMarker.setVisibility(View.GONE));
 
-                    // --- ЭФФЕКТ "ОСТЫВАНИЯ" И ПЕРЕЧЕРКИВАНИЯ КНОПКИ ---
+                    // --- ЭФФЕКТ getString(R.string.text_auto_140) И ПЕРЕЧЕРКИВАНИЯ КНОПКИ ---
                     // Анимация подмены иконки (сжатие и возврат)
                     imgToggle.animate().scaleX(0.8f).scaleY(0.8f).setDuration(100)
                             .withEndAction(() -> {
                                 // Ставим перечеркнутый глаз
                                 imgToggle.setImageResource(R.drawable.ic_btn_eye_closed);
 
-                                // Применяем серый фильтр, чтобы кнопка "остыла"
+                                // Применяем серый фильтр, чтобы кнопка getString(R.string.text_auto_141)
                                 imgToggle.setColorFilter(Color.parseColor("#757575"));
                                 imgToggle.setAlpha(0.6f);
 
@@ -1608,7 +1671,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
                     v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
 
-                    Toast.makeText(this, "Метка скрыта", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.text_auto_142), Toast.LENGTH_SHORT).show();
 
                 } else {
                     // ПОКАЗЫВАЕМ МЕТКУ
@@ -1621,7 +1684,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                             .scaleY(1f)
                             .setDuration(250);
 
-                    // --- ЭФФЕКТ "АКТИВАЦИИ" И ОТКРЫТИЯ КНОПКИ ---
+                    // --- ЭФФЕКТ getString(R.string.text_auto_143) И ОТКРЫТИЯ КНОПКИ ---
                     // Анимация вспышки (увеличение и возврат)
                     imgToggle.animate().scaleX(1.1f).scaleY(1.1f).setDuration(150)
                             .withEndAction(() -> {
@@ -1637,7 +1700,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
                     v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
 
-                    Toast.makeText(this, "Метка включена", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.text_auto_144), Toast.LENGTH_SHORT).show();
                 }
             });
         }
@@ -1668,7 +1731,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             // Возвращаем абсолютный путь (file://...)
             return destFile.getAbsolutePath();
         } catch (Exception e) {
-            Log.e("MarkerPhoto", "Ошибка копирования", e);
+            Log.e("MarkerPhoto", getString(R.string.text_auto_145), e);
             return null;
         }
     }
@@ -1714,7 +1777,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void showConfirmDeleteDialog(int position, String listName) {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_confirm_delete, null);
         TextView tvMessage = dialogView.findViewById(R.id.tvConfirmMessage);
-        tvMessage.setText("Вы уверены, что хотите удалить \"" + listName + "\"? Все точки и фотографии будут удалены безвозвратно.");
+        tvMessage.setText(getString(R.string.text_auto_146) + listName + getString(R.string.text_auto_147));
 
         AlertDialog confirmDialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
                 .setView(dialogView)
@@ -1744,7 +1807,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 currentActiveList = allLists.get(0);
             } else {
                 // Если не осталось списков, создаём новый по умолчанию
-                TravelList defaultList = new TravelList("Моя поездка");
+                TravelList defaultList = new TravelList(getString(R.string.text_auto_109));
                 allLists.add(defaultList);
                 currentActiveList = defaultList;
             }
@@ -1761,7 +1824,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         saveAllData();
         syncAllDataToCloud();
 
-        Toast.makeText(this, "Поездка удалена", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.text_auto_148), Toast.LENGTH_SHORT).show();
     }
     private void deletePhotosFromList(TravelList list) {
         if (list == null || list.locations == null) return;
@@ -1847,24 +1910,24 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                         if (geojson != null) drawBoundary(geojson);
 
                         // Определяем тип места для карточки
-                        String displayType = "Объект";
+                        String displayType = getString(R.string.text_auto_149);
 
                         if (type != null && !type.isEmpty()) {
                             String t = type.toLowerCase();
 
                             // --- ЛОГИКА ДЛЯ ПОДЗАГОЛОВКА (displayType) ---
                             if (t.matches(".*(city|town|administrative|suburb).*")) {
-                                displayType = "Город / Район";
+                                displayType = getString(R.string.text_auto_150);
                             } else if (t.equals("village") || t.equals("hamlet")) {
-                                displayType = "Деревня / Село";
+                                displayType = getString(R.string.text_auto_151);
                             } else if (t.contains("park") || t.contains("forest") || t.contains("wood") || t.equals("garden")) {
-                                displayType = "Природная зона";
+                                displayType = getString(R.string.text_auto_152);
                             } else if (t.matches(".*(peak|mountain|volcano|hill).*")) {
-                                displayType = "Горная вершина";
+                                displayType = getString(R.string.text_auto_153);
                             } else if (t.matches(".*(water|river|lake|reservoir|canal).*")) {
-                                displayType = "Водный объект";
+                                displayType = getString(R.string.text_auto_154);
                             } else if (t.matches(".*(monastery|church|castle|fortress|ruins).*")) {
-                                displayType = "Историческое место";
+                                displayType = getString(R.string.text_auto_155);
                             }
 
 
@@ -1887,11 +1950,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
                     });
                 } else {
-                    runOnUiThread(() -> Toast.makeText(this, "Место не найдено. Попробуйте уточнить запрос.", Toast.LENGTH_SHORT).show());
+                    runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_156), Toast.LENGTH_SHORT).show());
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                runOnUiThread(() -> Toast.makeText(this, "Ошибка сети: проверьте интернет", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_157), Toast.LENGTH_SHORT).show());
             }
         }).start();
 
@@ -1916,13 +1979,22 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             // Принудительно сообщаем BottomSheetBehaviour актуальную высоту
             sheetBehavior.setPeekHeight(450);
             sheetBehavior.setPeekHeight(450);
-            if (mapLibre != null) {
-                mapLibre.getUiSettings().setAllGesturesEnabled(false); // Отключаем карту
-            }
+
             sheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
             infoCard.requestLayout();  // гарантируем пересчёт лэйаута
             // ВОТ ЭТА СТРОЧКА:
             infoCard.bringToFront();
+
+            boolean isDark = (getResources().getConfiguration().uiMode
+                    & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+
+            if (infoCard instanceof MaterialCardView) {
+                ((MaterialCardView) infoCard).setCardBackgroundColor(
+                        isDark ? Color.parseColor("#1E1E1E") : Color.parseColor("#E6212121"));
+            }
+            if (title != null) title.setTextColor(isDark ? Color.WHITE : Color.parseColor("#FFFFFF"));
+            if (desc != null) desc.setTextColor(isDark ? Color.parseColor("#B0B0B0") : Color.parseColor("#CCFFFFFF"));
+// txtFlora, txtTemp, txtHeight можно оставить как есть
         }
 
 
@@ -2121,18 +2193,20 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     .create();
 
             String json = gson.toJson(allLists);
-            editor.putString("saved_travels", json);
+            String key = getStorageKey();
+            editor.putString(key, json);
             editor.apply();
 
-            android.util.Log.d("OzTrip", "Данные сохранены! Размер списка: " + allLists.size());
+            android.util.Log.d("OzTrip", getString(R.string.text_auto_158) + allLists.size());
         } catch (Exception e) {
-            android.util.Log.e("OzTrip", "Ошибка сохранения: " + e.getMessage());
+            android.util.Log.e("OzTrip", getString(R.string.text_auto_111) + e.getMessage());
         }
     }
 
     private void loadAllData() {
         SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
-        String json = prefs.getString("saved_travels", null);
+        String key = getStorageKey();
+        String json = prefs.getString(key, null);
 
         Gson gson = new GsonBuilder()
                 .registerTypeAdapter(LatLng.class, new LatLngAdapter())
@@ -2148,14 +2222,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 Collections.sort(allLists, (a, b) -> a.name.compareToIgnoreCase(b.name));
             } else {
                 allLists.clear();
-                allLists.add(new TravelList("Поездка 1"));
+                allLists.add(new TravelList(getString(R.string.text_auto_159)));
             }
         }
 
         // Если после загрузки всё равно пусто (первый запуск)
         if (allLists == null || allLists.isEmpty()) {
             allLists = new ArrayList<>();
-            allLists.add(new TravelList("Поездка 1"));
+            allLists.add(new TravelList(getString(R.string.text_auto_159)));
         }
 
         // ВСЕГДА привязываем текущую активную поездку к первой в списке
@@ -2173,7 +2247,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     @Override protected void onStart() { super.onStart(); if (mapView != null) mapView.onStart(); }
 
-    @Override protected void onResume() { super.onResume(); if (mapView != null) mapView.onResume(); }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        String lang = getSharedPreferences("OzTripPrefs", MODE_PRIVATE).getString("language", "ru");
+        if (!lang.equals(currentLanguage)) {
+            // Пересоздаём, если язык изменился
+            recreate();
+        }
+    }
 
     @Override
     protected void onPause() {

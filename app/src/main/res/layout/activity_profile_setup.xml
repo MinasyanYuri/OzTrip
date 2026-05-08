@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="24dp"
-    android:background="#FFFDE7"
+    android:background="?android:colorBackground"
     tools:context=".ProfileSetupActivity">
 
     <androidx.core.widget.NestedScrollView
@@ -26,7 +26,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="32dp"
                 android:layout_gravity="center"
-                android:text="Настройка профиля"
+                android:text="@string/text_33"
                 android:textColor="#FF9800"
                 android:textSize="32sp"
                 android:textStyle="bold" />
@@ -35,8 +35,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="40dp"
-                android:text="Username (уникальный)"
-                android:textColor="#E65100"
+                android:text="@string/text_34"
+                android:textColor="?colorPrimaryVariant"
                 android:textStyle="bold"
                 android:textSize="14sp" />
 
@@ -44,7 +44,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
                 android:layout_marginTop="8dp"
-                app:cardBackgroundColor="#FFFFFF"
+                app:cardBackgroundColor="?colorOnPrimary"
                 app:cardCornerRadius="14dp"
                 app:strokeColor="#FF9800"
                 app:strokeWidth="2dp">
@@ -54,10 +54,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:background="@android:color/transparent"
-                    android:hint="Например: oztrip_fan"
+                    android:hint="@string/text_37"
                     android:inputType="textFilter"
                     android:paddingHorizontal="16dp"
-                    android:textColor="#E65100"
+                    android:textColor="?colorPrimaryVariant"
                     android:textSize="18sp"
                     android:textStyle="bold" />
             </com.google.android.material.card.MaterialCardView>
@@ -77,7 +77,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Имя занято. Попробуйте:"
+                        android:text="@string/text_35"
                         android:textColor="#FF9800"
                         android:textStyle="bold" />
                     <com.google.android.material.chip.ChipGroup
@@ -92,8 +92,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
-                android:text="Ваше имя"
-                android:textColor="#E65100"
+                android:text="@string/text_12"
+                android:textColor="?colorPrimaryVariant"
                 android:textStyle="bold"
                 android:textSize="14sp" />
 
@@ -101,7 +101,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
                 android:layout_marginTop="8dp"
-                app:cardBackgroundColor="#FFFFFF"
+                app:cardBackgroundColor="?colorOnPrimary"
                 app:cardCornerRadius="14dp"
                 app:strokeColor="#FF9800"
                 app:strokeWidth="2dp">
@@ -111,10 +111,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:background="@android:color/transparent"
-                    android:hint="Введите имя"
+                    android:hint="@string/text_38"
                     android:inputType="textPersonName"
                     android:paddingHorizontal="16dp"
-                    android:textColor="#E65100"
+                    android:textColor="?colorPrimaryVariant"
                     android:textSize="18sp"
                     android:textStyle="bold" />
             </com.google.android.material.card.MaterialCardView>
@@ -138,7 +138,7 @@
         android:layout_width="match_parent"
         android:layout_height="64dp"
         android:layout_marginBottom="16dp"
-        android:text="Продолжить"
+        android:text="@string/text_36"
         android:textSize="17sp"
         android:textStyle="bold"
         app:cornerRadius="16dp"

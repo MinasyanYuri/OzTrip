@@ -23,6 +23,8 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
+        MaterialButton btnGuest = findViewById(R.id.btnGuestLogin);
+        btnGuest.setOnClickListener(v -> enterGuestMode());
         mAuth = FirebaseAuth.getInstance();
         etEmail = findViewById(R.id.etEmailLogin);
         etPassword = findViewById(R.id.etPasswordLogin);
@@ -52,7 +54,7 @@ public class LoginActivity extends AppCompatActivity {
             String password = etPassword.getText().toString().trim();
 
             if (input.isEmpty() || password.isEmpty()) {
-                showError("Заполните все поля");
+                showError(getString(R.string.text_auto_86));
                 return;
             }
 
@@ -70,6 +72,19 @@ public class LoginActivity extends AppCompatActivity {
             finish();
         });
     }
+
+    private void enterGuestMode() {
+        getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                .edit()
+                .putBoolean("guest_mode", true)
+                .remove("guest_travels")
+                .apply();
+
+        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
     private void findEmailByUsername(String username, String password) {
         FirebaseFirestore db = FirebaseFirestore.getInstance();
 
@@ -81,20 +96,20 @@ public class LoginActivity extends AppCompatActivity {
                         if (!task.getResult().isEmpty()) {
                             // НИК НАЙДЕН
                             String email = task.getResult().getDocuments().get(0).getString("email");
-                            android.util.Log.d("OZTRIP_DEBUG", "Нашел email для ника: " + email);
+                            android.util.Log.d("OZTRIP_DEBUG", getString(R.string.text_auto_87) + email);
 
                             if (email != null && !email.isEmpty()) {
                                 loginWithEmail(email, password);
                             } else {
-                                showError("В базе у этого ника нет почты!");
+                                showError(getString(R.string.text_auto_88));
                             }
                         } else {
                             // НИК НЕ НАЙДЕН - давай выведем в лог, что именно мы искали
-                            android.util.Log.e("OZTRIP_DEBUG", "Ник '" + username + "' не найден в БД");
-                            showError("Ник '" + username + "' не зарегистрирован");
+                            android.util.Log.e("OZTRIP_DEBUG", getString(R.string.text_auto_89) + username + getString(R.string.text_auto_90));
+                            showError(getString(R.string.text_auto_89) + username + getString(R.string.text_auto_91));
                         }
                     } else {
-                        showError("Ошибка БД: " + task.getException().getMessage());
+                        showError(getString(R.string.text_auto_92) + task.getException().getMessage());
                     }
                 });
     }
@@ -114,10 +129,10 @@ public class LoginActivity extends AppCompatActivity {
                         finish();
                     } else {
                         // НИК ВЕРНЫЙ, НО ПАРОЛЬ ОШИБОЧНЫЙ (или другая ошибка)
-                        showError("Неверный пароль. Попробуйте еще раз");
+                        showError(getString(R.string.text_auto_93));
 
-                        // Чтобы было совсем "люкс", можно подсветить поле пароля красным
-                        etPassword.setError("Проверьте пароль");
+                        // Чтобы было совсем getString(R.string.text_auto_94), можно подсветить поле пароля красным
+                        etPassword.setError(getString(R.string.text_auto_95));
                     }
                 });
     }

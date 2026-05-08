@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="#FFFFFF"
+    android:background="?colorOnPrimary"
     android:padding="24dp">
 
     <View
@@ -17,8 +17,8 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Выбери своего героя"
-        android:textColor="#E65100"
+        android:text="@string/text_76"
+        android:textColor="?colorPrimaryVariant"
         android:textSize="20sp"
         android:textStyle="bold"
         android:layout_marginBottom="16dp"/>
@@ -34,7 +34,7 @@
         style="@style/Widget.MaterialComponents.Button.TextButton"
         android:layout_width="match_parent"
         android:layout_height="60dp"
-        android:text="Загрузить фото из галереи"
+        android:text="@string/text_77"
         android:textColor="#FF9800"
         app:icon="@android:drawable/ic_menu_gallery"
         app:iconTint="#FF9800" />
@@ -44,6 +44,6 @@
         style="@style/Widget.MaterialComponents.Button.TextButton"
         android:layout_width="match_parent"
         android:layout_height="55dp"
-        android:text="Вернуть инициалы"
-        android:textColor="#757575"/>
+        android:text="@string/text_78"
+        android:textColor="?android:textColorSecondary"/>
 </LinearLayout>

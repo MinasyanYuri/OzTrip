@@ -99,7 +99,7 @@ public class ProfileSetupActivity extends AppCompatActivity {
         String email = getIntent().getStringExtra("user_email");
 
         if (username.length() < 3 || name.isEmpty()) {
-            Toast.makeText(this, "Заполните все поля", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.text_auto_86), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -113,7 +113,7 @@ public class ProfileSetupActivity extends AppCompatActivity {
                         intent.putExtra("user_email", email); // НЕ ТЕРЯЕМ ПОЧТУ!
                         startActivity(intent);
                     } else {
-                        Toast.makeText(this, "Ник занят", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.text_auto_160), Toast.LENGTH_SHORT).show();
                         suggestAlternatives(username);
                     }
                 });

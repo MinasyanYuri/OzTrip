@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFDE7"
+    android:background="?android:colorBackground"
     android:fillViewport="true">
 
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -17,7 +17,7 @@
             android:id="@+id/tvHeader"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="ПРОФИЛЬ"
+            android:text="@string/text_6"
             android:textColor="#FF9800"
             android:textSize="22sp"
             android:textStyle="bold"
@@ -52,7 +52,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center"
-                    android:textColor="#FFFFFF"
+                    android:textColor="?colorOnPrimary"
                     android:textSize="54sp"
                     android:textStyle="bold"
                     android:visibility="visible" />
@@ -74,7 +74,7 @@
                 app:fabSize="mini"
                 app:srcCompat="@android:drawable/ic_menu_edit"
                 app:backgroundTint="#FF9800"
-                app:tint="#FFFFFF"
+                app:tint="?colorOnPrimary"
                 app:elevation="10dp"/>
         </RelativeLayout>
 
@@ -87,39 +87,39 @@
             app:layout_constraintTop_toBottomOf="@id/avatarContainer">
 
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="Имя пользователя" android:textColor="#E65100" android:textStyle="bold" android:textSize="13sp" android:layout_marginStart="8dp"/>
+                android:text="@string/text_7" android:textColor="?colorPrimaryVariant" android:textStyle="bold" android:textSize="13sp" android:layout_marginStart="8dp"/>
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent" android:layout_height="60dp" android:layout_marginTop="6dp" android:layout_marginBottom="18dp"
                 app:cardCornerRadius="16dp" app:cardElevation="3dp" app:strokeColor="#FF9800" app:strokeWidth="2dp">
                 <EditText android:id="@+id/etEditName" android:layout_width="match_parent" android:layout_height="match_parent"
-                    android:background="@android:color/transparent" android:paddingHorizontal="20dp" android:textColor="#E65100" android:textStyle="bold" android:hint="Ваше имя" />
+                    android:background="@android:color/transparent" android:paddingHorizontal="20dp" android:textColor="?colorPrimaryVariant" android:textStyle="bold" android:hint="@string/text_12" />
             </com.google.android.material.card.MaterialCardView>
 
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="Никнейм (@)" android:textColor="#E65100" android:textStyle="bold" android:textSize="13sp" android:layout_marginStart="8dp"/>
+                android:text="@string/text_8" android:textColor="?colorPrimaryVariant" android:textStyle="bold" android:textSize="13sp" android:layout_marginStart="8dp"/>
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent" android:layout_height="60dp" android:layout_marginTop="6dp" android:layout_marginBottom="18dp"
                 app:cardCornerRadius="16dp" app:cardElevation="3dp" app:strokeColor="#FF9800" app:strokeWidth="2dp">
                 <EditText android:id="@+id/etEditUsername" android:layout_width="match_parent" android:layout_height="match_parent"
-                    android:background="@android:color/transparent" android:paddingHorizontal="20dp" android:textColor="#E65100" android:textStyle="bold" android:hint="username" />
+                    android:background="@android:color/transparent" android:paddingHorizontal="20dp" android:textColor="?colorPrimaryVariant" android:textStyle="bold" android:hint="@string/text_13" />
             </com.google.android.material.card.MaterialCardView>
 
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="Электронная почта" android:textColor="#E65100" android:textStyle="bold" android:textSize="13sp" android:layout_marginStart="8dp"/>
+                android:text="@string/text_9" android:textColor="?colorPrimaryVariant" android:textStyle="bold" android:textSize="13sp" android:layout_marginStart="8dp"/>
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent" android:layout_height="60dp" android:layout_marginTop="6dp" android:layout_marginBottom="18dp"
-                app:cardCornerRadius="16dp" app:cardElevation="0dp" app:strokeColor="#E0E0E0" app:strokeWidth="2dp" app:cardBackgroundColor="#F9F9F9">
+                app:cardCornerRadius="16dp" app:cardElevation="0dp" app:strokeColor="?android:textColorSecondary" app:strokeWidth="2dp" app:cardBackgroundColor="#F9F9F9">
                 <EditText android:id="@+id/etEditEmail" android:layout_width="match_parent" android:layout_height="match_parent"
                     android:background="@android:color/transparent" android:paddingHorizontal="20dp" android:textColor="#9E9E9E" android:enabled="false" android:textStyle="bold" />
             </com.google.android.material.card.MaterialCardView>
 
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="Безопасность (Пароль)" android:textColor="#E65100" android:textStyle="bold" android:textSize="13sp" android:layout_marginStart="8dp"/>
+                android:text="@string/text_10" android:textColor="?colorPrimaryVariant" android:textStyle="bold" android:textSize="13sp" android:layout_marginStart="8dp"/>
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent" android:layout_height="60dp" android:layout_marginTop="6dp"
                 app:cardCornerRadius="16dp" app:cardElevation="3dp" app:strokeColor="#FF9800" app:strokeWidth="2dp">
                 <EditText android:id="@+id/etEditPassword" android:layout_width="match_parent" android:layout_height="match_parent"
-                    android:background="@android:color/transparent" android:paddingHorizontal="20dp" android:textColor="#E65100" android:inputType="textPassword" android:textStyle="bold" android:hint="••••••••" />
+                    android:background="@android:color/transparent" android:paddingHorizontal="20dp" android:textColor="?colorPrimaryVariant" android:inputType="textPassword" android:textStyle="bold" android:hint="@string/text_14" />
             </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
@@ -130,7 +130,7 @@
             android:layout_height="68dp"
             android:layout_marginTop="40dp"
             android:layout_marginBottom="32dp"
-            android:text="СОХРАНИТЬ ДАННЫЕ"
+            android:text="@string/text_11"
             android:textSize="17sp"
             android:textStyle="bold"
             app:backgroundTint="#FF9800"

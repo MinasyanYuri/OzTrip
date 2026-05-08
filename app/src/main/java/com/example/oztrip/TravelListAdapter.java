@@ -93,21 +93,17 @@ public class TravelListAdapter extends RecyclerView.Adapter<TravelListAdapter.Vi
         holder.text.setText(list.name);
 
         if (isSheetMode) {
-            // === РЕЖИМ BOTTOM SHEET ===
             if (selectionMode) {
-                // Режим выбора: показываем чекбокс, скрываем иконку
                 if (holder.checkBox != null) {
                     holder.checkBox.setVisibility(View.VISIBLE);
                     holder.checkBox.setChecked(selectedPositions.contains(position));
                 }
                 if (holder.editIcon != null) holder.editIcon.setVisibility(View.GONE);
                 holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item);
-                holder.text.setTextColor(Color.parseColor("#FFFFFF"));
+                holder.text.setTextColor(Color.WHITE);  // Белый текст
             } else {
-                // Обычный режим
                 if (holder.checkBox != null) holder.checkBox.setVisibility(View.GONE);
                 if (position == selectedIndex) {
-                    // Активная поездка
                     holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item_active);
                     holder.text.setTextColor(Color.WHITE);
                     if (holder.editIcon != null) {
@@ -115,19 +111,17 @@ public class TravelListAdapter extends RecyclerView.Adapter<TravelListAdapter.Vi
                         holder.editIcon.setColorFilter(Color.WHITE);
                     }
                 } else {
-                    // Неактивная поездка
                     holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item);
-                    holder.text.setTextColor(Color.parseColor("#B0B0B0"));
+                    holder.text.setTextColor(Color.parseColor("#B0B0B0")); // Серый текст
                     if (holder.editIcon != null) holder.editIcon.setVisibility(View.GONE);
                 }
             }
         } else {
-            // === РЕЖИМ ПОЛЗУНКА (старый код) ===
             MaterialCardView card = (MaterialCardView) holder.itemView;
             if (holder.checkBox != null) holder.checkBox.setVisibility(View.GONE);
             if (position == selectedIndex) {
                 card.setCardBackgroundColor(Color.parseColor("#FF9800"));
-                card.setStrokeColor(Color.parseColor("#FFFFFF"));
+                card.setStrokeColor(Color.WHITE);               // Белая обводка
                 card.setStrokeWidth(dpToPx(2, holder.itemView));
                 holder.text.setTextColor(Color.WHITE);
                 holder.text.setAlpha(1.0f);
@@ -137,9 +131,9 @@ public class TravelListAdapter extends RecyclerView.Adapter<TravelListAdapter.Vi
                 }
             } else {
                 card.setCardBackgroundColor(Color.parseColor("#CCFFFFFF"));
-                card.setStrokeColor(Color.parseColor("#FFFFFF"));
+                card.setStrokeColor(Color.WHITE);               // Белая обводка
                 card.setStrokeWidth(dpToPx(1, holder.itemView));
-                holder.text.setTextColor(Color.parseColor("#B0B0B0"));
+                holder.text.setTextColor(Color.parseColor("#B0B0B0")); // Серый текст
                 holder.text.setAlpha(0.9f);
                 if (holder.editIcon != null) {
                     holder.editIcon.setVisibility(View.GONE);

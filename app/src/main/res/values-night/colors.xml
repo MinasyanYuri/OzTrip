@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Фоны -->
+    <color name="bg_dark">#121212</color>
+    <color name="bg_card">#1E1E2E</color>
+    <color name="bg_glass">#232330</color>
+
+    <!-- Акценты (оранжевые) -->
+    <color name="accent_gold">#FFB800</color>
+    <color name="accent_orange">#FF6B00</color>
+    <color name="accent_glow">#FFD700</color>
+
+    <!-- Текст -->
+    <color name="text_primary">?colorOnPrimary</color>
+    <color name="text_secondary">#B0B0C8</color>
+    <color name="text_hint">#606070</color>
+</resources>

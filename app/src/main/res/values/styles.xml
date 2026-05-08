@@ -63,8 +63,8 @@
 
     <style name="ThemeOverlay.MaterialComponents.MaterialCalendar" parent="ThemeOverlay.MaterialComponents.Dialog">
         <item name="colorPrimary">#FF9800</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorOnSurface">#FFFFFF</item>
+        <item name="colorOnPrimary">?colorOnPrimary</item>
+        <item name="colorOnSurface">?colorOnPrimary</item>
         <item name="colorOnSurfaceVariant">#A0FFFFFF</item>
         <item name="android:windowBackground">@android:color/transparent</item>
     </style>
@@ -74,12 +74,12 @@
     </style>
 
     <style name="CustomDaySelectedStyle" parent="Widget.MaterialComponents.MaterialCalendar.Day.Selected">
-        <item name="itemFillColor">#FF9800</item> <item name="itemTextColor">#FFFFFF</item>
+        <item name="itemFillColor">#FF9800</item> <item name="itemTextColor">?colorOnPrimary</item>
     </style>
 
     <style name="ThemeOverlay.OzTrip.Calendar" parent="ThemeOverlay.MaterialComponents.MaterialCalendar">
         <item name="colorPrimary">#FF9800</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorOnPrimary">?colorOnPrimary</item>
         <item name="android:windowBackground">@android:color/transparent</item>
     </style>
     <style name="SheetDialog" parent="Theme.Design.Light.BottomSheetDialog">
@@ -118,4 +118,5 @@
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:colorBackground">@android:color/transparent</item>
     </style>
+
 </resources>

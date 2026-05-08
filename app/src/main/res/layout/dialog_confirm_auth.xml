@@ -27,15 +27,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Подтверждение"
-            android:textColor="#FFFFFF"
+            android:text="@string/text_58"
+            android:textColor="?attr/colorSurface"
             android:textSize="20sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Введите пароль для доступа"
+            android:text="@string/text_59"
             android:textColor="#999"
             android:textSize="14sp" />
 
@@ -49,7 +49,7 @@
             app:passwordToggleTint="#FF9500"
             app:boxStrokeColor="#FF9500"
             app:hintTextColor="#FF9500"
-            android:hint="Пароль">
+            android:hint="@string/text_61">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etConfirmPass"
@@ -64,7 +64,7 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="24dp"
-            android:text="ПОДТВЕРДИТЬ"
+            android:text="@string/text_60"
             android:backgroundTint="#FF9500"
             android:textColor="#000"
             app:cornerRadius="16dp" />

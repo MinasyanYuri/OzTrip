@@ -24,10 +24,10 @@
         </aapt:attr>
     </path>
 
-    <path android:fillColor="#FFFFFF" android:pathData="M39.4,8 V32 H40.6 V8 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M39.4,48 V72 H40.6 V48 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M8,39.4 H32 V40.6 H8 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M48,39.4 H72 V40.6 H48 Z" />
+    <path android:fillColor="?colorOnPrimary" android:pathData="M39.4,8 V32 H40.6 V8 Z" />
+    <path android:fillColor="?colorOnPrimary" android:pathData="M39.4,48 V72 H40.6 V48 Z" />
+    <path android:fillColor="?colorOnPrimary" android:pathData="M8,39.4 H32 V40.6 H8 Z" />
+    <path android:fillColor="?colorOnPrimary" android:pathData="M48,39.4 H72 V40.6 H48 Z" />
 
     <path android:fillColor="#FF9800" android:pathData="M39.1,31 H40.9 V32.5 H39.1 Z" />
     <path android:fillColor="#FF9800" android:pathData="M39.1,47.5 H40.9 V49 H39.1 Z" />
@@ -39,7 +39,7 @@
         android:strokeWidth="2.2"
         android:pathData="M40,40m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0" />
     <path
-        android:strokeColor="#FFFFFF"
+        android:strokeColor="?colorOnPrimary"
         android:strokeWidth="1.8"
         android:pathData="M40,40m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0" />
 

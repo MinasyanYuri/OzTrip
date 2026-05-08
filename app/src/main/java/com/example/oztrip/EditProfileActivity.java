@@ -118,7 +118,7 @@ public class EditProfileActivity extends AppCompatActivity {
             Glide.with(this).load(avatar).circleCrop().into(ivAvatar);
         }
         else {
-            // СЛУЧАЙ 3: Твой "Жираф" (ID ресурса или имя ресурса)
+            // СЛУЧАЙ 3: Твой getString(R.string.text_auto_69) (ID ресурса или имя ресурса)
             try {
                 // Пробуем преобразовать строку "2131230962" в число
                 int resId = Integer.parseInt(avatar);
@@ -171,8 +171,8 @@ public class EditProfileActivity extends AppCompatActivity {
 
                         // ПРОВЕРКА НА 6 СИМВОЛОВ
                         if (newPass.length() < 6) {
-                            etPassword.setError("Пароль должен быть не менее 6 символов");
-                            Toast.makeText(this, "Пароль слишком короткий!", Toast.LENGTH_SHORT).show();
+                            etPassword.setError(getString(R.string.text_auto_70));
+                            Toast.makeText(this, getString(R.string.text_auto_71), Toast.LENGTH_SHORT).show();
                             return;
                         }
 
@@ -182,19 +182,19 @@ public class EditProfileActivity extends AppCompatActivity {
                                     // Очищаем временный пароль, так как он больше не актуален
                                     getSharedPreferences("OzTrip_Prefs", MODE_PRIVATE).edit().remove("temp_pass").apply();
 
-                                    Toast.makeText(this, "Профиль и пароль успешно обновлены!", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(this, getString(R.string.text_auto_72), Toast.LENGTH_SHORT).show();
                                     finish(); // Закрываем экран и возвращаемся в Settings
                                 })
                                 .addOnFailureListener(e -> {
-                                    Toast.makeText(this, "Ошибка обновления пароля: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                    Toast.makeText(this, getString(R.string.text_auto_73) + e.getMessage(), Toast.LENGTH_LONG).show();
                                 });
                     } else {
                         // Если пароль не меняли, просто закрываем экран
-                        Toast.makeText(this, "Данные обновлены!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.text_auto_74), Toast.LENGTH_SHORT).show();
                         finish();
                     }
                 })
-                .addOnFailureListener(e -> Toast.makeText(this, "Ошибка Firestore: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                .addOnFailureListener(e -> Toast.makeText(this, getString(R.string.text_auto_75) + e.getMessage(), Toast.LENGTH_SHORT).show());
     }
 
     private void saveProfileChanges() {
@@ -203,7 +203,7 @@ public class EditProfileActivity extends AppCompatActivity {
         String newEmail = etEmail.getText().toString().trim();
 
         if (newUsername.isEmpty() || newName.isEmpty()) {
-            Toast.makeText(this, "Заполни все поля", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.text_auto_76), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -218,7 +218,7 @@ public class EditProfileActivity extends AppCompatActivity {
                 }
                 if (isTaken) {
                     String suggested = generateNicknameSuggestion(newUsername);
-                    etUsername.setError("Ник занят. Попробуй: " + suggested);
+                    etUsername.setError(getString(R.string.text_auto_77) + suggested);
                 } else {
                     checkEmailAndSave(newName, newUsername, newEmail);
                 }
@@ -237,7 +237,7 @@ public class EditProfileActivity extends AppCompatActivity {
                     }
                 }
                 if (emailTaken) {
-                    etEmail.setError("Почта занята");
+                    etEmail.setError(getString(R.string.text_auto_78));
                 } else {
                     executeFinalUpdate(name, username, email);
                 }

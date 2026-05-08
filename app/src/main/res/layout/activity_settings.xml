@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.core.widget.NestedScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FDFDFD">
+    android:fillViewport="true"
+    android:background="?android:attr/colorBackground">
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
 
+    <!-- Верхний градиентный фон (оставляем ваш) -->
     <View
         android:id="@+id/topGradientView"
         android:layout_width="match_parent"
@@ -13,6 +18,7 @@
         android:background="@drawable/orange_gradient_bg"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Кнопка "Назад" -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardBack"
         android:layout_width="42dp"
@@ -34,11 +40,12 @@
             android:background="?attr/selectableItemBackgroundBorderless" />
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- Заголовок -->
     <TextView
         android:id="@+id/tvSettingsTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Настройки"
+        android:text="@string/text_44"
         android:textColor="@android:color/white"
         android:textSize="18sp"
         android:textStyle="bold"
@@ -47,6 +54,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@id/cardBack" />
 
+    <!-- Блок профиля (оставляем без изменений) -->
     <LinearLayout
         android:id="@+id/profileBlock"
         android:layout_width="match_parent"
@@ -56,6 +64,7 @@
         android:orientation="vertical"
         app:layout_constraintTop_toBottomOf="@id/cardBack">
 
+        <!-- Аватар, приветствие, ник, кнопка "Изменить профиль" -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardAvatarContainer"
             android:layout_width="100dp"
@@ -70,7 +79,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center"
-                    android:textColor="#FFFFFF"
+                    android:textColor="?colorOnPrimary"
                     android:textSize="36sp"
                     android:textStyle="bold"
                     android:visibility="gone" />
@@ -95,7 +104,7 @@
             android:id="@+id/tvUserNick"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#E0E0E0"
+            android:textColor="?android:textColorSecondary"
             android:textSize="14sp" />
 
         <com.google.android.material.button.MaterialButton
@@ -103,13 +112,14 @@
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Изменить профиль"
+            android:text="@string/text_45"
             android:textColor="@android:color/white"
             android:textSize="12sp"
             android:textAllCaps="false"
             app:rippleColor="#33FFFFFF"/>
     </LinearLayout>
 
+    <!-- Карточка с полезными настройками -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/settingsCard"
         android:layout_width="match_parent"
@@ -128,7 +138,9 @@
             android:orientation="vertical"
             android:padding="8dp">
 
+            <!-- Тёмная тема -->
             <LinearLayout
+                android:id="@+id/itemDarkTheme"
                 android:layout_width="match_parent"
                 android:layout_height="64dp"
                 android:gravity="center_vertical"
@@ -138,7 +150,7 @@
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
-                    android:src="@android:drawable/ic_lock_idle_lock"
+                    android:src="@drawable/ic_dark_mode"
                     app:tint="#FF9500" />
 
                 <TextView
@@ -146,16 +158,102 @@
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
-                    android:text="Безопасность датчиков"
-                    android:textColor="#212121"
-                    android:textSize="16sp"
-                    android:textStyle="normal" />
+                    android:text="@string/text_46"
+                    android:textColor="?android:textColorPrimary"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchDarkTheme"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    app:thumbTint="#FF9500"
+                    app:trackTint="#FFE0B2" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#F5F5F5"
+                android:layout_marginHorizontal="16dp" />
+
+            <!-- Единицы измерения -->
+            <LinearLayout
+                android:id="@+id/itemUnits"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:background="?attr/selectableItemBackground">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_units"
+                    app:tint="#FF9500" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text="@string/text_47"
+                    android:textColor="?android:textColorPrimary"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/tvCurrentUnit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/text_48"
+                    android:textColor="#999"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#F5F5F5"
+                android:layout_marginHorizontal="16dp" />
+
+
+            <!-- Язык -->
+            <LinearLayout
+                android:id="@+id/itemLanguage"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:background="?attr/selectableItemBackground">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_language"
+                    app:tint="#FF9500" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text="@string/text_85"
+                    android:textColor="?android:textColorPrimary"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/tvCurrentLanguage"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/text_86"
+                    android:textColor="#999"
+                    android:textSize="14sp"
+                    android:layout_marginEnd="8dp" />
 
                 <ImageView
                     android:layout_width="18dp"
                     android:layout_height="18dp"
-                    android:src="@android:drawable/arrow_down_float"
-                    android:rotation="-90"
+                    android:src="@drawable/ic_chevron_right"
                     app:tint="#BDBDBD" />
             </LinearLayout>
 
@@ -165,7 +263,9 @@
                 android:background="#F5F5F5"
                 android:layout_marginHorizontal="16dp" />
 
+            <!-- О приложении -->
             <LinearLayout
+                android:id="@+id/itemAbout"
                 android:layout_width="match_parent"
                 android:layout_height="64dp"
                 android:gravity="center_vertical"
@@ -175,7 +275,7 @@
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
-                    android:src="@android:drawable/ic_dialog_email"
+                    android:src="@drawable/ic_info"
                     app:tint="#FF9500" />
 
                 <TextView
@@ -183,27 +283,26 @@
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
-                    android:text="Уведомления на почту"
-                    android:textColor="#212121"
+                    android:text="@string/text_50"
+                    android:textColor="?android:textColorPrimary"
                     android:textSize="16sp" />
 
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true"
-                    app:thumbTint="#FF9500"
-                    app:trackTint="#FFE0B2" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="#BDBDBD" />
             </LinearLayout>
-
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- Кнопка выхода (теперь привязана к низу карточки, а не к экрану) -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnLogoutSettings"
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:layout_margin="24dp"
-        android:text="Выйти из аккаунта"
+        android:text="@string/text_51"
         android:textColor="#FF5252"
         android:textAllCaps="false"
         android:textStyle="bold"
@@ -211,6 +310,8 @@
         app:cornerRadius="18dp"
         app:strokeColor="#FFDADA"
         app:strokeWidth="1dp"
-        app:layout_constraintBottom_toBottomOf="parent" />
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+        app:layout_constraintTop_toBottomOf="@id/settingsCard"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.core.widget.NestedScrollView>

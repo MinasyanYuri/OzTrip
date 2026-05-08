@@ -29,6 +29,8 @@ public class RegisterActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
 
+        MaterialButton btnGuest = findViewById(R.id.btnGuestRegister);
+        btnGuest.setOnClickListener(v -> enterGuestMode());
         // Инициализация Firebase
         mAuth = FirebaseAuth.getInstance();
 
@@ -70,16 +72,29 @@ public class RegisterActivity extends AppCompatActivity {
         });
     }
 
+    private void enterGuestMode() {
+        getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                .edit()
+                .putBoolean("guest_mode", true)
+                .remove("guest_travels")
+                .apply();
+
+        Intent intent = new Intent(RegisterActivity.this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
+
     private void performRegistration() {
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
 
         if (email.isEmpty()) {
-            showError("Введите почту");
+            showError(getString(R.string.text_auto_161));
             return;
         }
         if (password.length() < 6) {
-            showError("Пароль должен быть от 6 символов");
+            showError(getString(R.string.text_auto_162));
             return;
         }
 
@@ -111,11 +126,11 @@ public class RegisterActivity extends AppCompatActivity {
     private void handleFirebaseError(Exception e) {
         tvError.setVisibility(View.VISIBLE);
         if (e instanceof FirebaseAuthUserCollisionException) {
-            tvError.setText("Этот Email уже занят!");
+            tvError.setText(getString(R.string.text_auto_163));
         } else if (e instanceof FirebaseAuthWeakPasswordException) {
-            tvError.setText("Пароль слишком простой");
+            tvError.setText(getString(R.string.text_auto_164));
         } else {
-            tvError.setText("Ошибка связи с сервером");
+            tvError.setText(getString(R.string.text_auto_165));
         }
     }
 

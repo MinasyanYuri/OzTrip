@@ -46,7 +46,7 @@
 
         app:cardBackgroundColor="#FF9800"
 
-        app:strokeColor="#FFFFFF"
+        app:strokeColor="?colorOnPrimary"
 
         app:strokeWidth="2dp"
 
@@ -62,9 +62,9 @@
 
             android:gravity="center">
 
-            <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@android:drawable/ic_input_add" app:tint="#FFFFFF" />
+            <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@android:drawable/ic_input_add" app:tint="?colorOnPrimary" />
 
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Сохранить" android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="@string/text_23" android:textColor="?colorOnPrimary" android:textSize="15sp" android:textStyle="bold" />
 
         </LinearLayout>
 
@@ -119,8 +119,8 @@
             android:layout_height="44dp"
             android:minWidth="44dp"
             android:gravity="center"
-            android:text="3"
-            android:textColor="#FFFFFF"
+            android:text="@string/text_24"
+            android:textColor="?colorOnPrimary"
             android:textSize="14sp"
             android:textStyle="bold"
             android:background="@drawable/bg_icon_glass"
@@ -144,7 +144,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_add_premium"
-                app:tint="#FFFFFF"
+                app:tint="?colorOnPrimary"
                 android:padding="8dp" />
 
             <View
@@ -157,7 +157,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_settings_luxury"
-                app:tint="#FFFFFF"
+                app:tint="?colorOnPrimary"
                 android:padding="8dp" />
         </LinearLayout>
 
@@ -469,7 +469,7 @@
 
                         android:src="@android:drawable/ic_menu_close_clear_cancel"
 
-                        app:tint="#FFFFFF" />
+                        app:tint="?colorOnPrimary" />
 
                 </FrameLayout>
 
@@ -495,9 +495,9 @@
 
                         android:layout_height="wrap_content"
 
-                        android:text="Выберите место"
+                        android:text="@string/text_25"
 
-                        android:textColor="#FFFFFF"
+                        android:textColor="?colorOnPrimary"
 
                         android:textSize="28sp"
 
@@ -515,7 +515,7 @@
 
                         android:layout_marginTop="5dp"
 
-                        android:text="📍 Тяните вверх для деталей"
+                        android:text="@string/text_26"
 
                         android:textColor="#CCFFFFFF"
 
@@ -559,29 +559,9 @@
 
                             android:orientation="vertical">
 
-                            <TextView android:id="@+id/txtTemp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--°C" android:textColor="#FFD180" android:textSize="20sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/txtTemp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/text_27" android:textColor="#FFD180" android:textSize="20sp" android:textStyle="bold" />
 
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ТЕМП." android:textColor="#80FFFFFF" android:textSize="11sp" />
-
-                        </LinearLayout>
-
-
-
-                        <LinearLayout
-
-                            android:layout_width="0dp"
-
-                            android:layout_height="wrap_content"
-
-                            android:layout_weight="1"
-
-                            android:gravity="center"
-
-                            android:orientation="vertical">
-
-                            <TextView android:id="@+id/txtHeight" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--m" android:textColor="#FFFFFF" android:textSize="20sp" android:textStyle="bold" />
-
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ВЫСОТА" android:textColor="#80FFFFFF" android:textSize="11sp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/text_28" android:textColor="#80FFFFFF" android:textSize="11sp" />
 
                         </LinearLayout>
 
@@ -599,9 +579,29 @@
 
                             android:orientation="vertical">
 
-                            <TextView android:id="@+id/txtFlora" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="---" android:textColor="#FF9800" android:textSize="14sp" android:textStyle="bold" android:gravity="center" app:autoSizeTextType="uniform" />
+                            <TextView android:id="@+id/txtHeight" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/text_29" android:textColor="?colorOnPrimary" android:textSize="20sp" android:textStyle="bold" />
 
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="КООРДИНАТЫ" android:textColor="#80FFFFFF" android:textSize="11sp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/text_30" android:textColor="#80FFFFFF" android:textSize="11sp" />
+
+                        </LinearLayout>
+
+
+
+                        <LinearLayout
+
+                            android:layout_width="0dp"
+
+                            android:layout_height="wrap_content"
+
+                            android:layout_weight="1"
+
+                            android:gravity="center"
+
+                            android:orientation="vertical">
+
+                            <TextView android:id="@+id/txtFlora" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/text_31" android:textColor="#FF9800" android:textSize="14sp" android:textStyle="bold" android:gravity="center" app:autoSizeTextType="uniform" />
+
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/text_32" android:textColor="#80FFFFFF" android:textSize="11sp" />
 
                         </LinearLayout>
 

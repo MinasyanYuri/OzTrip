@@ -6,7 +6,7 @@ import com.google.gson.stream.JsonWriter;
 import org.maplibre.android.geometry.LatLng;
 import java.io.IOException;
 
-// Этот класс говорит Гсону: "Когда видишь LatLng, просто запиши lat и lon"
+// Этот класс говорит Гсону: getString(R.string.text_auto_79)
 public class LatLngAdapter extends TypeAdapter<LatLng> {
     @Override
     public void write(JsonWriter out, LatLng value) throws IOException {

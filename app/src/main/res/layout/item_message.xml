@@ -13,7 +13,7 @@
         android:maxWidth="280dp"
         android:padding="12dp"
         android:textSize="16sp"
-        android:textColor="#212121"
+        android:textColor="?android:textColorPrimary"
         android:background="@drawable/bg_message_bot"
         android:layout_gravity="start"/>
 </LinearLayout>

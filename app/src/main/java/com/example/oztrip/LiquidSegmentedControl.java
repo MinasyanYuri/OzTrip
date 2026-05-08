@@ -41,20 +41,35 @@ public class LiquidSegmentedControl extends View {
         super(context, attrs);
         init();
     }
+    private boolean darkMode = false;
 
+    public void setDarkMode(boolean dark) {
+        darkMode = dark;
+        if (dark) {
+            bgPaint.setColor(Color.parseColor("#2A1A00"));
+            strokePaint.setColor(Color.parseColor("#33FFFFFF"));
+            sliderPaint.setColor(Color.parseColor("#66FF9800"));
+        } else {
+            bgPaint.setColor(Color.parseColor("#B3FFFFFF"));
+            strokePaint.setColor(Color.parseColor("#E6FFFFFF"));
+            sliderPaint.setColor(Color.WHITE);
+        }
+        bgPaint.setShader(null);
+        invalidate();
+    }
     private void init() {
-        // 1. Фон "Стекло" (полупрозрачный белый с градиентом)
+        // 1. Фон getString(R.string.text_auto_80) (полупрозрачный белый с градиентом)
         bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         bgPaint.setStyle(Paint.Style.FILL);
         bgPaint.setColor(Color.parseColor("#B3FFFFFF")); // 70% белый
 
-        // 2. Обводка "Грань стекла" (тонкая белая)
+        // 2. Обводка getString(R.string.text_auto_81) (тонкая белая)
         strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(2f);
         strokePaint.setColor(Color.parseColor("#E6FFFFFF")); // 90% белый
 
-        // 3. Активный ползунок "Жидкая капля" (белый с мягкой тенью)
+        // 3. Активный ползунок getString(R.string.text_auto_82) (белый с мягкой тенью)
         sliderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         sliderPaint.setStyle(Paint.Style.FILL);
         sliderPaint.setColor(Color.WHITE);
@@ -70,8 +85,8 @@ public class LiquidSegmentedControl extends View {
         sliderRect = new RectF();
 
         // Тестовые вкладки
-        tabs.add("Карта");
-        tabs.add("Ии");
+        tabs.add(getContext().getString(R.string.text_auto_83));
+        tabs.add(getContext().getString(R.string.text_auto_84));
 
 
         setLayerType(LAYER_TYPE_SOFTWARE, null); // Для теней на старых Android
@@ -118,7 +133,15 @@ public class LiquidSegmentedControl extends View {
             float tabCenterX = (tabWidth * i) + (tabWidth / 2f);
             float ratio = 1.0f - Math.abs(sliderPosition - i);
             if (ratio < 0) ratio = 0;
-            int textColor = (int) colorEval.evaluate(ratio, Color.parseColor("#666666"), Color.parseColor("#FF9800"));
+
+            int textColor;
+            if (ratio > 0.5f) {
+                // Активная вкладка: оранжевая в светлой теме, белая в тёмной
+                textColor = darkMode ? Color.WHITE : Color.parseColor("#FF9800");
+            } else {
+                // Неактивная вкладка: серый (светлый или тёмный в зависимости от темы)
+                textColor = darkMode ? Color.parseColor("#B0B0B0") : Color.parseColor("#666666");
+            }
             textPaint.setColor(textColor);
             canvas.drawText(tabs.get(i), tabCenterX, textY, textPaint);
         }
@@ -151,7 +174,7 @@ public class LiquidSegmentedControl extends View {
         // Анимация Liquid перемещения с эффектом Overshoot
         animator = ValueAnimator.ofFloat(sliderPosition, index);
         animator.setDuration(450);
-        animator.setInterpolator(new OvershootInterpolator(1.4f)); // "Резиновый" эффект
+        animator.setInterpolator(new OvershootInterpolator(1.4f)); // getString(R.string.text_auto_85) эффект
         animator.addUpdateListener(animation -> {
             sliderPosition = (float) animation.getAnimatedValue();
             invalidate(); // Перерисовать кадр
