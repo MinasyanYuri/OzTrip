@@ -1,0 +1,1829 @@
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\AboutMeActivity.java ---
+
+package com.example.oztrip;
+
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.widget.EditText;
+import android.widget.ImageView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class AboutMeActivity extends BaseActivity  {
+
+    private EditText etAboutMe;
+    private SharedPreferences prefs;
+    private String originalText;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_about_me);
+
+        prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+        etAboutMe = findViewById(R.id.etAboutMe);
+        ImageView btnSave = findViewById(R.id.btnSaveAbout);
+        ImageView btnClear = findViewById(R.id.btnClearAbout);
+        ImageView btnBack = findViewById(R.id.btnBackAbout);
+
+        originalText = prefs.getString("about_me", "");
+        etAboutMe.setText(originalText);
+        etAboutMe.setSelection(etAboutMe.getText().length());
+
+        btnSave.setOnClickListener(v -> {
+            prefs.edit().putString("about_me", etAboutMe.getText().toString().trim()).apply();
+            finish();
+        });
+
+        btnClear.setOnClickListener(v -> {
+            etAboutMe.setText("");
+        });
+
+        btnBack.setOnClickListener(v -> {
+            if (etAboutMe.getText().toString().equals(originalText)) {
+                finish();
+            } else {
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("Сохранить изменения?")
+                        .setPositiveButton("Сохранить", (d, w) -> {
+                            prefs.edit().putString("about_me", etAboutMe.getText().toString().trim()).apply();
+                            finish();
+                        })
+                        .setNegativeButton("Не сохранять", (d, w) -> finish())
+                        .setNeutralButton("Продолжить редактирование", null)
+                        .show();
+            }
+        });
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\AiFragment.java ---
+
+package com.example.oztrip;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.location.Location;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.TextUtils;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.firebase.auth.FirebaseAuth;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.maplibre.android.camera.CameraUpdateFactory;
+import org.maplibre.android.geometry.LatLng;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+public class AiFragment extends Fragment {
+    private String cachedWeather = null;
+    private RecyclerView chatRecyclerView;
+    private EditText messageInput;
+    private ImageView sendButton;
+    private ChatAdapter chatAdapter;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private String cachedContext = null;
+    private int remainingRequests = -1;
+    private String resetTime = null;
+    private int remainingTokens = -1;
+    private String currentLang = "ru";
+    private OkHttpClient httpClient;
+
+    // OpenRouter (запасной)
+    private static final String OR_API_KEY = "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";
+    private static final String OR_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+    private static final String OR_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+
+    // Groq (основной)
+    private static final String GROQ_API_KEY = "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";   // <-- ВАШ НОВЫЙ КЛЮЧ
+    private static final String GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+    private static final String GROQ_MODEL = "llama-3.3-70b-versatile";
+
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
+        View root = inflater.inflate(R.layout.fragment_ai, container, false);
+
+        chatRecyclerView = root.findViewById(R.id.chatRecyclerView);
+        messageInput = root.findViewById(R.id.messageInput);
+        sendButton = root.findViewById(R.id.sendButton);
+
+        chatAdapter = new ChatAdapter();
+        chatRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        chatRecyclerView.setItemAnimator(null);
+        chatRecyclerView.setItemViewCacheSize(20);
+        chatRecyclerView.setAdapter(chatAdapter);
+
+        chatAdapter.setOnLocationClickListener((lat, lng) -> {
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity != null && activity.getLiquidNav() != null) {
+                activity.getLiquidNav().setSelectedIndex(0);
+            }
+            if (activity != null && activity.mapLibre != null) {
+                activity.mapLibre.animateCamera(
+                        CameraUpdateFactory.newLatLngZoom(new LatLng(lat, lng), 15), 1000);
+            }
+        });
+
+        chatAdapter.addMessage(new ChatMessage(getString(R.string.text_auto_1), false));
+
+        if (getActivity() != null) {
+            SharedPreferences prefs = getActivity().getSharedPreferences("OzTripPrefs", Context.MODE_PRIVATE);
+            currentLang = prefs.getString("language", "ru");
+        }
+
+        httpClient = new OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
+                .build();
+
+        sendButton.setOnClickListener(v -> sendMessage());
+        messageInput.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                sendMessage();
+                return true;
+            }
+            return false;
+        });
+
+        return root;
+    }
+
+    public void clearCachedContext() {
+        cachedContext = null;
+    }
+
+    private void sendMessage() {
+        String text = messageInput.getText().toString().trim();
+        if (TextUtils.isEmpty(text)) return;
+
+        chatAdapter.addMessage(new ChatMessage(text, true));
+        messageInput.setText("");
+
+        ChatMessage typing = new ChatMessage("...", false);
+        chatAdapter.addMessage(typing);
+
+        fetchWeatherIfNeeded(text, () -> {
+            cachedContext = buildFullContext();
+            String systemPrompt = buildSystemPrompt();
+
+            // 1. Сначала Groq
+            sendGroqRequest(systemPrompt, text, groqResponse -> {
+                if (!groqResponse.startsWith("ERROR:")) {
+                    displayResponse(groqResponse, typing);
+                } else {
+                    // 2. Groq недоступен → OpenRouter
+                    sendOpenRouterRequest(systemPrompt, text, orResponse -> {
+                        if (!orResponse.startsWith("ERROR:")) {
+                            displayResponse("(OpenRouter) " + orResponse, typing);
+                        } else {
+                            displayResponse("Извините, сервис временно недоступен. Попробуйте позже.", typing);
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    private void displayResponse(String text, ChatMessage typing) {
+        mainHandler.post(() -> {
+            if (!isAdded()) return;
+            chatAdapter.replaceLastMessage(new ChatMessage(text, false));
+        });
+    }
+
+    private String buildSystemPrompt() {
+        String prompt = "Ты — OzTrip AI, персональный гид пользователя по Армении. "
+                + "Ты видишь все его поездки, сохранённые точки, заметки, рейтинги и местоположение. "
+                + "Ты можешь предлагать любые места, даже если их нет в сохранённых данных. "
+                + "ВСЕГДА указывай координаты в формате [coord:широта,долгота] (без пробелов). "
+                + "Ты можешь управлять приложением через команды:\n"
+                + "- создать поездку: [action:create_trip;Название]\n"
+                + "- переименовать поездку: [action:rename_trip;старое_название;новое_название]\n"
+                + "- удалить поездку: [action:delete_trip;Название]\n"
+                + "- добавить точку в активную поездку: [action:add_point;широта;долгота;название]\n"
+                + "- построить маршрут из точек: [action:build_route;широта1,долгота1;широта2,долгота2;...]\n"
+                + "Команды вставляй прямо в ответ. Пример:\n"
+                + "Я создал поездку «Отдых» [coord:40.5515,44.9884]. [action:create_trip;Отдых]\n"
+                + "Будь дружелюбным, кратким и полезным. Отвечай на языке вопроса.\n\n";
+
+        if (cachedWeather != null) prompt += "Погода: " + cachedWeather + "\n";
+        if (cachedContext != null && !cachedContext.isEmpty())
+            prompt += "Данные пользователя:\n" + cachedContext + "\n";
+        if (remainingRequests >= 0)
+            prompt += String.format("Лимиты: запросов %d, сброс %s, токенов %d.\n",
+                    remainingRequests, resetTime != null ? resetTime : "неизвестно", remainingTokens);
+        return prompt;
+    }
+
+    // Безопасная обработка команд (ошибки не ломают ответ)
+    private String processActions(String response) {
+        if (response == null) return "";
+        try {
+            Pattern actionPattern = Pattern.compile("\\[action:([^\\]]+)\\]");
+            Matcher matcher = actionPattern.matcher(response);
+            boolean anyAction = false;
+            while (matcher.find()) {
+                String command = matcher.group(1);
+                anyAction = true;
+                // Выполняем команду в главном потоке
+                mainHandler.post(() -> {
+                    try {
+                        executeAction(command);
+                    } catch (Exception e) {
+                        Log.e("AiAction", "Ошибка UI-команды: " + command, e);
+                    }
+                });
+            }
+            if (anyAction) {
+                response = response.replaceAll("\\[action:[^\\]]+\\]", "").trim();
+            }
+        } catch (Exception e) {
+            Log.e("AiAction", "Ошибка в processActions", e);
+        }
+        return response;
+    }
+
+    private void executeAction(String command) {
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity == null) return;
+        String[] parts = command.split(";");
+        if (parts.length == 0) return;
+        String actionType = parts[0].trim();
+
+        // Переключаемся на карту, только если действие выполнено успешно
+        boolean success = false;
+
+        try {
+            switch (actionType) {
+                case "create_trip":
+                    if (parts.length > 1) { activity.createTrip(parts[1].trim()); success = true; }
+                    break;
+                case "rename_trip":
+                    if (parts.length > 2) { activity.renameTrip(parts[1].trim(), parts[2].trim()); success = true; }
+                    break;
+                case "delete_trip":
+                    if (parts.length > 1) { activity.deleteTrip(parts[1].trim()); success = true; }
+                    break;
+                case "add_point":
+                    if (parts.length > 3) {
+                        double lat = Double.parseDouble(parts[1].trim());
+                        double lng = Double.parseDouble(parts[2].trim());
+                        activity.addPoint(lat, lng, parts[3].trim());
+                        success = true;
+                    }
+                    break;
+                case "build_route":
+                    if (parts.length > 1) {
+                        String[] coords = parts[1].split(",");
+                        if (coords.length % 2 == 0) {
+                            List<LatLng> points = new ArrayList<>();
+                            for (int i = 0; i < coords.length; i += 2) {
+                                double lat = Double.parseDouble(coords[i].trim());
+                                double lng = Double.parseDouble(coords[i + 1].trim());
+                                points.add(new LatLng(lat, lng));
+                            }
+                            if (points.size() >= 2) { activity.buildRoute(points); success = true; }
+                        }
+                    }
+                    break;
+            }
+        } catch (Exception e) {
+            Log.e("AiAction", "Ошибка выполнения команды: " + command, e);
+        }
+
+        if (success) {
+            // После успешного действия переключаемся на карту
+            if (activity.getLiquidNav() != null) {
+                activity.getLiquidNav().setSelectedIndex(0);
+            }
+            activity.invalidateAiContext();
+        }
+    }
+
+    // ==================== Groq ====================
+    private void sendGroqRequest(String systemPrompt, String userText, OnAIResponseListener listener) {
+        executor.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("model", GROQ_MODEL);
+                JSONArray messages = new JSONArray();
+                messages.put(new JSONObject().put("role", "system").put("content", systemPrompt));
+                messages.put(new JSONObject().put("role", "user").put("content", userText));
+                payload.put("messages", messages);
+
+                RequestBody body = RequestBody.create(payload.toString(), JSON);
+                Request request = new Request.Builder()
+                        .url(GROQ_API_URL)
+                        .post(body)
+                        .addHeader("Authorization", "Bearer " + GROQ_API_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .build();
+
+                Response response = httpClient.newCall(request).execute();
+                String respBody = response.body().string();
+
+                if (response.isSuccessful()) {
+                    JSONObject obj = new JSONObject(respBody);
+                    String text = obj.getJSONArray("choices").getJSONObject(0)
+                            .getJSONObject("message").getString("content");
+                    String finalText = processActions(text);
+                    mainHandler.post(() -> listener.onResponse(finalText));
+                } else {
+                    mainHandler.post(() -> listener.onResponse("ERROR: Groq " + respBody));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> listener.onResponse("ERROR: " + e.getMessage()));
+            }
+        });
+    }
+
+    // ==================== OpenRouter (запасной) ====================
+    private void sendOpenRouterRequest(String systemPrompt, String userText, OnAIResponseListener listener) {
+        executor.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("model", OR_MODEL);
+                JSONArray messages = new JSONArray();
+                messages.put(new JSONObject().put("role", "system").put("content", systemPrompt));
+                messages.put(new JSONObject().put("role", "user").put("content", userText));
+                payload.put("messages", messages);
+
+                RequestBody body = RequestBody.create(payload.toString(), JSON);
+                Request request = new Request.Builder()
+                        .url(OR_API_URL)
+                        .post(body)
+                        .addHeader("Authorization", "Bearer " + OR_API_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("HTTP-Referer", "https://oztrip.app")
+                        .addHeader("X-Title", "OzTrip")
+                        .build();
+
+                Response response = httpClient.newCall(request).execute();
+                String respBody = response.body().string();
+
+                if (response.isSuccessful()) {
+                    JSONObject obj = new JSONObject(respBody);
+                    String text = obj.getJSONArray("choices").getJSONObject(0)
+                            .getJSONObject("message").getString("content");
+                    String finalText = processActions(text);
+                    mainHandler.post(() -> listener.onResponse(finalText));
+                } else {
+                    mainHandler.post(() -> listener.onResponse("ERROR: OR " + respBody));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> listener.onResponse("ERROR: " + e.getMessage()));
+            }
+        });
+    }
+
+    // ==================== Контекст (все поездки) ====================
+    private String buildFullContext() {
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity == null) return getString(R.string.text_auto_25);
+
+        StringBuilder ctx = new StringBuilder();
+        SharedPreferences prefs = getActivity().getSharedPreferences("OzTripPrefs", Context.MODE_PRIVATE);
+        String aboutMe = prefs.getString("about_me", "");
+        if (!aboutMe.isEmpty()) {
+            ctx.append("\nО пользователе: ").append(aboutMe).append("\n");
+        }
+
+        boolean isLoggedIn = FirebaseAuth.getInstance().getCurrentUser() != null;
+        ctx.append("Пользователь ").append(isLoggedIn ? "авторизован" : "в гостевом режиме").append(".\n");
+
+        Location loc = activity.getCurrentLocation();
+        if (loc != null) {
+            ctx.append(String.format(Locale.US, getString(R.string.text_auto_26), loc.getLatitude(), loc.getLongitude()));
+        } else {
+            ctx.append(getString(R.string.text_auto_27));
+        }
+
+        List<TravelList> allLists = activity.getAllTravelLists();
+        if (allLists != null && !allLists.isEmpty()) {
+            ctx.append("\n=== ВСЕ ПОЕЗДКИ ===\n");
+            TravelList active = activity.getCurrentActiveList();
+
+            for (int t = 0; t < allLists.size(); t++) {
+                TravelList list = allLists.get(t);
+                ctx.append(t + 1).append(". ").append(list.name);
+                ctx.append(" (локаций: ").append(list.locations != null ? list.locations.size() : 0);
+                ctx.append(", точек пути: ").append(list.pathPoints != null ? list.pathPoints.size() : 0).append(")");
+
+                if (list == active) ctx.append(" ← АКТИВНАЯ\n");
+                else ctx.append("\n");
+
+                List<SavedLocation> locations = list.locations;
+                if (locations != null && !locations.isEmpty()) {
+                    int maxPoints = (list == active) ? locations.size() : Math.min(locations.size(), 3);
+                    ctx.append("   Точки");
+                    if (maxPoints < locations.size()) ctx.append(" (первые ").append(maxPoints).append(" из ").append(locations.size()).append(")");
+                    ctx.append(":\n");
+
+                    for (int i = 0; i < maxPoints; i++) {
+                        SavedLocation sl = locations.get(i);
+                        ctx.append("     ").append(i + 1).append(". ");
+                        ctx.append(sl.customName.isEmpty() ? getString(R.string.text_auto_33) : sl.customName);
+                        ctx.append(" [уровень ").append(sl.level).append("]");
+                        ctx.append(" координаты: [coord:").append(String.format(Locale.US, "%.5f,%.5f]", sl.latLng.getLatitude(), sl.latLng.getLongitude()));
+                        if (!sl.note.isEmpty()) ctx.append(", заметка: \"").append(sl.note).append("\"");
+                        if (sl.date != null && !sl.date.isEmpty()) ctx.append(", дата: ").append(sl.date);
+                        ctx.append(", рейтинг: ").append(sl.rating);
+                        ctx.append(" фото: ").append(sl.photoPaths != null ? sl.photoPaths.size() : 0);
+                        ctx.append("\n");
+                    }
+                }
+
+                List<LatLng> path = list.pathPoints;
+                if (path != null && path.size() > 1) {
+                    ctx.append("   Маршрут: ").append(path.size()).append(" точек, ");
+                    LatLng first = path.get(0);
+                    LatLng last = path.get(path.size() - 1);
+                    ctx.append(String.format(Locale.US, "от %.5f,%.5f до %.5f,%.5f\n", first.getLatitude(), first.getLongitude(), last.getLatitude(), last.getLongitude()));
+                }
+            }
+        }
+
+        return ctx.toString();
+    }
+
+    private void fetchWeatherIfNeeded(String userMessage, Runnable onReady) {
+        String lower = userMessage.toLowerCase();
+        if (lower.contains("погод") || lower.contains("температ") || lower.contains("weather")) {
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity == null) { onReady.run(); return; }
+            Location loc = activity.getCurrentLocation();
+            if (loc == null) {
+                cachedWeather = "Местоположение неизвестно, погода недоступна.";
+                onReady.run();
+                return;
+            }
+            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + loc.getLatitude() + "&longitude=" + loc.getLongitude() + "&current_weather=true";
+            executor.execute(() -> {
+                try {
+                    Request request = new Request.Builder().url(url).build();
+                    Response response = httpClient.newCall(request).execute();
+                    if (response.isSuccessful()) {
+                        JSONObject json = new JSONObject(response.body().string());
+                        JSONObject current = json.getJSONObject("current_weather");
+                        double temp = current.getDouble("temperature");
+                        double wind = current.getDouble("windspeed");
+                        int code = current.getInt("weathercode");
+                        String desc = getWeatherDescription(code);
+                        cachedWeather = String.format(Locale.US, "%.0f°C, ветер %.1f км/ч, %s.", temp, wind, desc);
+                    } else {
+                        cachedWeather = "Не удалось получить погоду.";
+                    }
+                } catch (Exception e) {
+                    cachedWeather = "Ошибка получения погоды.";
+                }
+                mainHandler.post(onReady);
+            });
+        } else {
+            cachedWeather = null;
+            onReady.run();
+        }
+    }
+
+    private String getWeatherDescription(int code) {
+        if (code <= 1) return "ясно";
+        if (code <= 3) return "облачно";
+        if (code <= 48) return "туман";
+        if (code <= 57) return "морось";
+        if (code <= 67) return "дождь";
+        if (code <= 77) return "снег";
+        if (code <= 82) return "ливень";
+        if (code <= 86) return "снегопад";
+        return "гроза";
+    }
+
+    interface OnAIResponseListener {
+        void onResponse(String text);
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        executor.shutdown();
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\AvatarEditorActivity.java ---
+
+package com.example.oztrip;
+
+import static android.content.Intent.getIntent;
+
+import android.content.Intent;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
+import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.bumptech.glide.Glide;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
+
+import java.util.HashMap;
+import java.util.Map;
+import com.cloudinary.android.MediaManager;
+import com.cloudinary.android.callback.ErrorInfo;
+import com.cloudinary.android.callback.UploadCallback;
+public class AvatarEditorActivity extends BaseActivity  {
+
+    private ImageView ivAvatarLarge;
+    private MaterialCardView cardAvatarLarge;
+    private Uri currentImageUri;
+    private TextView tvAvatarPlaceholder;
+    private LinearLayout llPaletteContainer;
+    private HorizontalScrollView hsvPalette;
+    private ProgressBar pbLoading;
+
+    private String name, username, uid;
+    private int selectedColor = Color.parseColor("#212121");
+    private int selectedIconRes = 0;
+    private final int[] palette = {
+            Color.parseColor("#cc0000"), Color.parseColor("#FF5252"), Color.parseColor("#FF4081"),
+            Color.parseColor("#E040FB"), Color.parseColor("#7C4DFF"), Color.parseColor("#536DFE"),
+            Color.parseColor("#448AFF"), Color.parseColor("#40C4FF"), Color.parseColor("#18FFFF"),
+            Color.parseColor("#69F0AE"), Color.parseColor("#178700"), Color.parseColor("#B2FF59"),
+            Color.parseColor("#EEFF41"), Color.parseColor("#FFD740"), Color.parseColor("#FFAB40"),
+            Color.parseColor("#FF6E40"),
+            Color.parseColor("#BDBDBD"), Color.parseColor("#757575"),
+            Color.parseColor("#212121"), Color.parseColor("#5D4037"), Color.parseColor("#8D6E63"),
+            Color.parseColor("#FFCCBC")
+    };
+
+    private final int[] pngIcons = {
+            R.drawable.man, R.drawable.woman, R.drawable.astronaut,
+            R.drawable.bear, R.drawable.cat, R.drawable.dog,
+            R.drawable.bluedog, R.drawable.giraffe, R.drawable.lion,
+            R.drawable.chicken, R.drawable.dinosaur, R.drawable.meerkat,
+            R.drawable.panda, R.drawable.penguin, R.drawable.rabbit
+    };
+
+    private final ActivityResultLauncher<Intent> imagePickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    String type = getContentResolver().getType(uri);
+                    if (type != null && type.startsWith("image/")) {
+                        currentImageUri = uri;
+                        selectedIconRes = 0;
+                        updateAvatarDisplay();
+                    }
+                }
+            }
+    );
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_avatar_editor);
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            Toast.makeText(this, getString(R.string.text_auto_65), Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        try {
+            java.util.Map<String, String> config = new java.util.HashMap<>();
+            config.put("cloud_name", "dzwqtyn5a");
+            config.put("api_key", "288782578214651");
+            config.put("api_secret", "9d3Am2nQFQR5D1P6mMue_8U1LJo");
+            MediaManager.init(this, config);
+        } catch (IllegalStateException e) {
+            // Если MediaManager уже инициализирован, просто игнорируем
+        }
+
+        // Инициализация данных
+        name = getIntent().getStringExtra("user_name");
+        username = getIntent().getStringExtra("user_username");
+        uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+
+        // Привязка View
+        ivAvatarLarge = findViewById(R.id.ivAvatarLarge);
+        cardAvatarLarge = findViewById(R.id.cardAvatarLarge);
+        tvAvatarPlaceholder = findViewById(R.id.tvAvatarPlaceholder);
+        llPaletteContainer = findViewById(R.id.llPaletteContainer);
+        hsvPalette = findViewById(R.id.hsvPalette);
+        pbLoading = findViewById(R.id.pbLoading);
+        String currentAvatar = getIntent().getStringExtra("current_avatar");
+        String currentColor = getIntent().getStringExtra("current_color");
+        boolean isEditing = getIntent().getBooleanExtra("is_editing", false);
+        setupPalette();
+
+        if (name != null && !name.isEmpty()) {
+            tvAvatarPlaceholder.setText(name.substring(0, 1).toUpperCase());
+        }
+        if (currentColor != null) {
+            selectedColor = Color.parseColor(currentColor);
+        }
+        if (currentAvatar != null && currentAvatar.startsWith("http")) {
+            // Если это ссылка на фото (Cloudinary)
+            ivAvatarLarge.setVisibility(View.VISIBLE);
+            tvAvatarPlaceholder.setVisibility(View.GONE);
+            Glide.with(this).load(currentAvatar).into(ivAvatarLarge);
+        } else if (currentAvatar != null && !currentAvatar.equals("initials")) {
+            // Если это иконка-персонаж (хранится как ID ресурса)
+            try {
+                selectedIconRes = Integer.parseInt(currentAvatar);
+            } catch (Exception e) { selectedIconRes = 0; }
+        }
+        findViewById(R.id.btnChooseNew).setOnClickListener(v -> showAvatarOptions());
+        findViewById(R.id.btnSaveAvatar).setOnClickListener(v -> uploadAllDataToFirebase());
+        findViewById(R.id.btnBack).setOnClickListener(v -> finish());
+
+        updateAvatarDisplay();
+    }
+
+    private void setupPalette() {
+        llPaletteContainer.removeAllViews();
+        for (int color : palette) {
+            MaterialCardView colorCircle = new MaterialCardView(this);
+            int size = (int) (40 * getResources().getDisplayMetrics().density);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(size, size);
+            params.setMargins(12, 0, 12, 0);
+
+            colorCircle.setLayoutParams(params);
+            colorCircle.setRadius(size / 2f);
+            colorCircle.setCardBackgroundColor(color);
+            colorCircle.setStrokeWidth(0);
+            colorCircle.setClickable(true);
+
+            colorCircle.setOnClickListener(v -> {
+                selectedColor = color;
+                currentImageUri = null;
+                selectedIconRes = 0;
+                updateAvatarDisplay();
+
+                for (int i = 0; i < llPaletteContainer.getChildCount(); i++) {
+                    ((MaterialCardView) llPaletteContainer.getChildAt(i)).setStrokeWidth(0);
+                }
+                colorCircle.setStrokeWidth(6);
+                colorCircle.setStrokeColor(Color.WHITE);
+            });
+            llPaletteContainer.addView(colorCircle);
+        }
+    }
+
+    private void uploadAllDataToFirebase() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            // Гость – просто завершаем настройку профиля без загрузки в облако
+            Toast.makeText(this, getString(R.string.text_auto_66), Toast.LENGTH_SHORT).show();
+            finishRegistration("initials", "#FFFFFF"); // или любой дефолтный цвет
+            return;
+        }
+        if (pbLoading != null) pbLoading.setVisibility(View.VISIBLE);
+
+        String hexColor = String.format("#%06X", (0xFFFFFF & selectedColor));
+
+        if (currentImageUri != null) {
+            // Используем Cloudinary вместо Firebase Storage
+            uploadImageToCloudinary(currentImageUri);
+        } else if (selectedIconRes != 0) {
+            finishRegistration(String.valueOf(selectedIconRes), "#FFFFFF");
+        } else {
+            finishRegistration("initials", hexColor);
+        }
+    }
+
+    private void uploadImageToCloudinary(Uri imageUri) {
+        MediaManager.get().upload(imageUri)
+                .option("folder", "user_avatars")
+                .callback(new UploadCallback() {
+                    @Override
+                    public void onStart(String requestId) {}
+
+                    @Override
+                    public void onProgress(String requestId, long bytes, long totalBytes) {}
+
+                    @Override
+                    public void onSuccess(String requestId, java.util.Map resultData) {
+                        // Это прямая ссылка на фото, которую мы сохраним в Firestore
+                        String imageUrl = (String) resultData.get("secure_url");
+                        finishRegistration(imageUrl, "#FFFFFF");
+                    }
+
+                    @Override
+                    public void onError(String requestId, ErrorInfo error) {
+                        if (pbLoading != null) pbLoading.setVisibility(View.GONE);
+                        Toast.makeText(AvatarEditorActivity.this, getString(R.string.text_auto_67) + error.getDescription(), Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onReschedule(String requestId, ErrorInfo error) {}
+                }).dispatch();
+    }
+
+
+    private void finishRegistration(String selectedAvatar, String avatarColor) {
+        if (pbLoading != null) pbLoading.setVisibility(View.VISIBLE);
+
+        // Проверяем, откуда мы пришли
+        boolean isEditing = getIntent().getBooleanExtra("is_editing", false);
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+
+        // Данные для обновления/сохранения
+        java.util.Map<String, Object> userUpdates = new java.util.HashMap<>();
+        userUpdates.put("avatar", selectedAvatar);
+        userUpdates.put("avatarColor", avatarColor);
+
+        if (isEditing) {
+            // --- СЦЕНАРИЙ РЕДАКТИРОВАНИЯ ---
+            FirebaseFirestore.getInstance().collection("users").document(uid)
+                    .update(userUpdates) // Используем update, чтобы не затереть пароль/ник
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(this, getString(R.string.text_auto_68), Toast.LENGTH_SHORT).show();
+                        finish(); // Просто закрываем этот экран и возвращаемся в профиль
+                    })
+                    .addOnFailureListener(e -> {
+                        pbLoading.setVisibility(View.GONE);
+                        Toast.makeText(this, getString(R.string.text_auto_61) + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+
+        } else {
+            // --- СЦЕНАРИЙ РЕГИСТРАЦИИ (Твой старый код) ---
+            userUpdates.put("uid", uid);
+            String email = getIntent().getStringExtra("user_email");
+            if (email == null) email = "";
+            userUpdates.put("email", email);
+            userUpdates.put("username", getIntent().getStringExtra("user_username"));
+            userUpdates.put("name", getIntent().getStringExtra("user_name"));
+
+            FirebaseFirestore.getInstance().collection("users").document(uid)
+                    .set(userUpdates) // Тут используем set, так как документа еще нет
+                    .addOnSuccessListener(aVoid -> {
+                        Intent intent = new Intent(this, MainActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        // В конце успешного сохранения, перед startActivity(intent)
+                        getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                                .edit()
+                                .putBoolean("registration_complete", true)
+                                .apply();
+                        startActivity(intent);
+                        finish();
+                    });
+        }
+    }
+
+    private void showAvatarOptions() {
+        BottomSheetDialog bottomSheet = new BottomSheetDialog(this, R.style.BottomSheetDialogTheme);
+        View view = getLayoutInflater().inflate(R.layout.layout_avatar_options, null);
+
+        RecyclerView rvIcons = view.findViewById(R.id.rvIcons);
+        MaterialButton btnGallery = view.findViewById(R.id.btnOpenGallery);
+        MaterialButton btnReset = view.findViewById(R.id.btnResetToInitials);
+
+        rvIcons.setLayoutManager(new GridLayoutManager(this, 3));
+        rvIcons.setAdapter(new IconAdapter(pngIcons, iconRes -> {
+            selectedIconRes = iconRes;
+            currentImageUri = null;
+            updateAvatarDisplay();
+            bottomSheet.dismiss();
+        }));
+
+        btnGallery.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_PICK);
+            intent.setType("image/*");
+            imagePickerLauncher.launch(intent);
+            bottomSheet.dismiss();
+        });
+
+        btnReset.setOnClickListener(v -> {
+            currentImageUri = null;
+            selectedIconRes = 0;
+            updateAvatarDisplay();
+            bottomSheet.dismiss();
+        });
+
+        bottomSheet.setContentView(view);
+        bottomSheet.show();
+    }
+
+    private void updateAvatarDisplay() {
+        Animation fadeIn = AnimationUtils.loadAnimation(this, android.R.anim.fade_in);
+        fadeIn.setDuration(400);
+
+        if (currentImageUri != null || selectedIconRes != 0) {
+            tvAvatarPlaceholder.setVisibility(View.GONE);
+            ivAvatarLarge.setVisibility(View.VISIBLE);
+
+            if (currentImageUri != null) {
+                ivAvatarLarge.setImageURI(currentImageUri);
+                ivAvatarLarge.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                ivAvatarLarge.setPadding(0, 0, 0, 0);
+            } else {
+                ivAvatarLarge.setImageResource(selectedIconRes);
+                ivAvatarLarge.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+                ivAvatarLarge.setPadding(30, 30, 30, 30);
+            }
+
+            ivAvatarLarge.startAnimation(fadeIn);
+            cardAvatarLarge.setCardBackgroundColor(Color.WHITE);
+            cardAvatarLarge.setStrokeWidth(0);
+            hsvPalette.setVisibility(View.GONE);
+            findViewById(R.id.tvPaletteHint).setVisibility(View.GONE);
+
+        } else {
+            tvAvatarPlaceholder.setVisibility(View.VISIBLE);
+            ivAvatarLarge.setVisibility(View.GONE);
+            tvAvatarPlaceholder.startAnimation(fadeIn);
+
+            cardAvatarLarge.setCardBackgroundColor(selectedColor);
+            cardAvatarLarge.setStrokeWidth(4);
+            cardAvatarLarge.setStrokeColor(Color.parseColor("#FF9800"));
+            hsvPalette.setVisibility(View.VISIBLE);
+            findViewById(R.id.tvPaletteHint).setVisibility(View.VISIBLE);
+        }
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\BaseActivity.java ---
+
+package com.example.oztrip;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.os.Build;
+import android.os.Bundle;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.Locale;
+
+public class BaseActivity extends AppCompatActivity {
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        // Применяем сохранённую локаль к базовому контексту
+        SharedPreferences prefs = newBase.getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+        String lang = prefs.getString("language", "ru");
+        super.attachBaseContext(applyLocale(newBase, lang));
+    }
+
+    private Context applyLocale(Context context, String lang) {
+        Locale locale = new Locale(lang);
+        Locale.setDefault(locale);
+        Resources res = context.getResources();
+        Configuration config = res.getConfiguration();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            config.setLocale(locale);
+        } else {
+            config.locale = locale;
+        }
+        res.updateConfiguration(config, res.getDisplayMetrics());
+        return context;
+    }
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        // Ещё раз применяем локаль перед загрузкой макета
+        SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+        String lang = prefs.getString("language", "ru");
+        applyLocale(this, lang);
+        super.onCreate(savedInstanceState);
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\ChatAdapter.java ---
+
+package com.example.oztrip;
+
+import android.graphics.Color;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.TextPaint;
+import android.text.method.LinkMovementMethod;
+import android.text.style.ClickableSpan;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
+
+    private final List<ChatMessage> messages = new ArrayList<>();
+
+    public interface OnLocationClickListener {
+        void onLocationClick(double lat, double lng);
+    }
+
+    private OnLocationClickListener locationClickListener;
+
+    public void setOnLocationClickListener(OnLocationClickListener listener) {
+        this.locationClickListener = listener;
+    }
+
+    public void addMessage(ChatMessage msg) {
+        messages.add(msg);
+        notifyItemInserted(messages.size() - 1);
+    }
+
+    public void replaceLastMessage(ChatMessage newMsg) {
+        int pos = messages.size() - 1;
+        if (pos >= 0) {
+            messages.set(pos, newMsg);
+            notifyItemChanged(pos);
+        }
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_message, parent, false);
+        return new ViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        ChatMessage msg = messages.get(position);
+
+        if (!msg.isUser) {
+            // Сообщение от бота – ищем координатные ссылки
+            SpannableString spannable = new SpannableString(msg.text);
+            Pattern pattern = Pattern.compile("\\[coord:([^,\\]]+),([^,\\]]+)\\]");
+            Matcher matcher = pattern.matcher(spannable);
+
+            while (matcher.find()) {
+                String latStr = matcher.group(1).trim();
+                String lngStr = matcher.group(2).trim();
+                try {
+                    double lat = Double.parseDouble(latStr);
+                    double lng = Double.parseDouble(lngStr);
+                    ClickableSpan span = new ClickableSpan() {
+                        @Override
+                        public void onClick(@NonNull View widget) {
+                            if (locationClickListener != null) {
+                                locationClickListener.onLocationClick(lat, lng);
+                            }
+                        }
+                        @Override
+                        public void updateDrawState(@NonNull TextPaint ds) {
+                            super.updateDrawState(ds);
+                            ds.setUnderlineText(true);
+                            ds.setColor(Color.BLUE);
+                        }
+                    };
+                    spannable.setSpan(span, matcher.start(), matcher.end(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                } catch (NumberFormatException ignored) {}
+            }
+
+            holder.textView.setText(spannable);
+            holder.textView.setMovementMethod(LinkMovementMethod.getInstance());
+        } else {
+            // Сообщение пользователя – обычный текст
+            holder.textView.setText(msg.text);
+        }
+
+        // Внешний вид (цвет фона) оставляем как было
+        if (msg.isUser) {
+            holder.textView.setBackgroundResource(R.drawable.bg_message_user);
+            holder.textView.setTextColor(holder.itemView.getContext()
+                    .getResources().getColor(android.R.color.white));
+            ((ViewGroup.MarginLayoutParams) holder.textView.getLayoutParams())
+                    .setMargins(80, 0, 0, 0);
+        } else {
+            holder.textView.setBackgroundResource(R.drawable.bg_message_bot);
+            ((ViewGroup.MarginLayoutParams) holder.textView.getLayoutParams())
+                    .setMargins(0, 0, 80, 0);
+        }
+    }
+
+    @Override
+    public int getItemCount() {
+        return messages.size();
+    }
+
+    static class ViewHolder extends RecyclerView.ViewHolder {
+        TextView textView;
+        ViewHolder(View itemView) {
+            super(itemView);
+            textView = itemView.findViewById(R.id.messageText);
+        }
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\ChatMessage.java ---
+
+package com.example.oztrip;
+
+import java.util.Objects;
+
+public class ChatMessage {
+    public String text;
+    public boolean isUser;
+    public long id; // для идентификации в DiffUtil
+
+    public ChatMessage(String text, boolean isUser) {
+        this.text = text;
+        this.isUser = isUser;
+        this.id = System.nanoTime(); // уникальный ID
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ChatMessage that = (ChatMessage) o;
+        return id == that.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\Converters.java ---
+
+package com.example.oztrip;
+
+import androidx.room.TypeConverter;
+
+import com.google.common.reflect.TypeToken;
+import com.google.gson.Gson;
+
+import org.maplibre.android.geometry.LatLng;
+
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Converters {
+    @TypeConverter
+    public static String fromLatLngList(List<LatLng> list) {
+        if (list == null) return null;
+        StringBuilder sb = new StringBuilder();
+        for (org.maplibre.android.geometry.LatLng loc : list) {
+            sb.append(loc.getLatitude()).append(",").append(loc.getLongitude()).append(";");
+        }
+        return sb.toString();
+    }
+
+    @TypeConverter
+    public static List<org.maplibre.android.geometry.LatLng> toLatLngList(String data) {
+        if (data == null || data.isEmpty()) return new ArrayList<>();
+        List<org.maplibre.android.geometry.LatLng> list = new ArrayList<>();
+        String[] points = data.split(";");
+        for (String p : points) {
+            String[] latLng = p.split(",");
+            if (latLng.length == 2) {
+                list.add(new org.maplibre.android.geometry.LatLng(
+                        Double.parseDouble(latLng[0]), Double.parseDouble(latLng[1])));
+            }
+        }
+        return list;
+    }
+
+    @TypeConverter
+    public static List<String> fromString(String value) {
+        Type listType = new TypeToken<ArrayList<String>>() {}.getType();
+        return new Gson().fromJson(value, listType);
+    }
+
+    @TypeConverter
+    public static String fromList(List<String> list) {
+        Gson gson = new Gson();
+        return gson.toJson(list);
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\EditProfileActivity.java ---
+
+package com.example.oztrip;
+
+import android.annotation.SuppressLint;
+import android.content.Intent;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.bumptech.glide.Glide;
+import com.google.android.material.card.MaterialCardView;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class EditProfileActivity extends BaseActivity  {
+
+    private EditText etName, etUsername, etEmail, etPassword;
+    private ImageView ivAvatar;
+    private TextView tvInitials;
+    private MaterialCardView cardAvatarContainer;
+    private FirebaseFirestore db;
+    private FirebaseAuth mAuth;
+    private String uid;
+    private String currentAvatarUrl = "initials"; // Храним текущую аватарку
+    private String currentColorHex = "#FF9500";   // Храним текущий цвет
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_edit_profile);
+
+// Внутри onCreate замени инициализацию полей на эту:
+        // 1. ВОТ ЭТОГО НЕ ХВАТАЕТ:
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+
+        if (mAuth.getCurrentUser() != null) {
+            uid = mAuth.getCurrentUser().getUid();
+        } else {
+            // Если юзер не залогинен, не даем ему тут находиться
+            finish();
+            return;
+        }
+        etName = findViewById(R.id.etEditName);
+        etUsername = findViewById(R.id.etEditUsername);
+        etEmail = findViewById(R.id.etEditEmail);
+        etPassword = findViewById(R.id.etEditPassword);
+
+        ivAvatar = findViewById(R.id.ivEditAvatar);
+        tvInitials = findViewById(R.id.tvEditInitials);
+        cardAvatarContainer = findViewById(R.id.cardEditAvatarContainer);
+
+// Кнопка выбора аватара теперь на FloatingActionButton (но ID тот же)
+        findViewById(R.id.btnOpenAvatarEditor).setOnClickListener(v -> {
+            Intent intent = new Intent(this, AvatarEditorActivity.class);
+            intent.putExtra("user_name", etName.getText().toString());
+            intent.putExtra("current_avatar", currentAvatarUrl);
+            intent.putExtra("current_color", currentColorHex);
+            intent.putExtra("is_editing", true);
+            startActivity(intent);
+        });
+
+        // Заполняем пароль из временного хранилища
+        String savedPass = getSharedPreferences("OzTrip_Prefs", MODE_PRIVATE)
+                .getString("temp_pass", "");
+        if (!savedPass.isEmpty()) {
+            etPassword.setText(savedPass);
+        }
+
+        loadUserData();
+
+        // Кнопка сохранения
+        findViewById(R.id.btnSaveAll).setOnClickListener(v -> saveProfileChanges());
+    }
+
+    private void loadUserData() {
+        db.collection("users").document(uid).get().addOnSuccessListener(doc -> {
+            if (doc.exists()) {
+                String name = doc.getString("name");
+                String username = doc.getString("username");
+                String email = doc.getString("email");
+
+                // КЛЮЧЕВОЙ МОМЕНТ: Сохраняем данные в переменные класса
+                currentAvatarUrl = doc.getString("avatar");
+                currentColorHex = doc.getString("avatarColor");
+
+                etName.setText(name);
+                etUsername.setText(username);
+                etEmail.setText(email);
+                // В loadUserData после etEmail.setText(email);
+                etEmail.setFocusable(false);
+                etEmail.setAlpha(0.6f); // Делаем его чуть тусклее
+
+                displayAvatar(currentAvatarUrl, currentColorHex, name);
+            }
+        });
+    }
+    private void displayAvatar(String avatar, String colorHex, String name) {
+        ivAvatar.setVisibility(View.GONE);
+        tvInitials.setVisibility(View.VISIBLE);
+
+        if (avatar == null || avatar.isEmpty() || avatar.equals("initials")) {
+            // СЛУЧАЙ 1: Просто буквы
+            showInitials(name, colorHex);
+        }
+        else if (avatar.startsWith("http")) {
+            // СЛУЧАЙ 2: Ссылка из интернета
+            tvInitials.setVisibility(View.GONE);
+            ivAvatar.setVisibility(View.VISIBLE);
+            Glide.with(this).load(avatar).circleCrop().into(ivAvatar);
+        }
+        else {
+            // СЛУЧАЙ 3: Твой getString(R.string.text_auto_69) (ID ресурса или имя ресурса)
+            try {
+                // Пробуем преобразовать строку "2131230962" в число
+                int resId = Integer.parseInt(avatar);
+                tvInitials.setVisibility(View.GONE);
+                ivAvatar.setVisibility(View.VISIBLE);
+
+                Glide.with(this)
+                        .load(resId) // Загружаем по ID
+                        .circleCrop()
+                        .into(ivAvatar);
+            } catch (NumberFormatException e) {
+                // Если в базе вдруг имя файла "giraffe", а не ID
+                showInitials(name, colorHex);
+            }
+        }
+    }
+
+    // Вынес отрисовку букв в отдельный метод для чистоты
+    private void showInitials(String name, String colorHex) {
+        ivAvatar.setVisibility(View.GONE);
+        tvInitials.setVisibility(View.VISIBLE);
+        if (name != null && !name.isEmpty()) {
+            tvInitials.setText(name.substring(0, 1).toUpperCase());
+        }
+        tvInitials.setTextColor(Color.WHITE);
+        try {
+            cardAvatarContainer.setCardBackgroundColor(Color.parseColor(colorHex));
+        } catch (Exception e) {
+            cardAvatarContainer.setCardBackgroundColor(Color.parseColor("#FF9800"));
+        }
+    }
+
+    private void executeFinalUpdate(String name, String username, String email) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("name", name);
+        updates.put("username", username);
+        updates.put("email", email);
+
+        // 1. Сначала обновляем текстовые данные в Firestore
+        db.collection("users").document(uid).update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    String newPass = etPassword.getText().toString().trim();
+
+                    // Достаем старый пароль из SharedPreferences для сравнения
+                    String initialPass = getSharedPreferences("OzTrip_Prefs", MODE_PRIVATE)
+                            .getString("temp_pass", "");
+
+                    // 2. Проверяем: введен ли новый пароль, не пустой ли он и изменился ли он
+                    if (!newPass.isEmpty() && !newPass.equals(initialPass)) {
+
+                        // ПРОВЕРКА НА 6 СИМВОЛОВ
+                        if (newPass.length() < 6) {
+                            etPassword.setError(getString(R.string.text_auto_70));
+                            Toast.makeText(this, getString(R.string.text_auto_71), Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        // 3. Обновляем пароль в Firebase Auth
+                        mAuth.getCurrentUser().updatePassword(newPass)
+                                .addOnSuccessListener(unused -> {
+                                    // Очищаем временный пароль, так как он больше не актуален
+                                    getSharedPreferences("OzTrip_Prefs", MODE_PRIVATE).edit().remove("temp_pass").apply();
+
+                                    Toast.makeText(this, getString(R.string.text_auto_72), Toast.LENGTH_SHORT).show();
+                                    finish(); // Закрываем экран и возвращаемся в Settings
+                                })
+                                .addOnFailureListener(e -> {
+                                    Toast.makeText(this, getString(R.string.text_auto_73) + e.getMessage(), Toast.LENGTH_LONG).show();
+                                });
+                    } else {
+                        // Если пароль не меняли, просто закрываем экран
+                        Toast.makeText(this, getString(R.string.text_auto_74), Toast.LENGTH_SHORT).show();
+                        finish();
+                    }
+                })
+                .addOnFailureListener(e -> Toast.makeText(this, getString(R.string.text_auto_75) + e.getMessage(), Toast.LENGTH_SHORT).show());
+    }
+
+    private void saveProfileChanges() {
+        String newName = etName.getText().toString().trim();
+        String newUsername = etUsername.getText().toString().trim();
+        String newEmail = etEmail.getText().toString().trim();
+
+        if (newUsername.isEmpty() || newName.isEmpty()) {
+            Toast.makeText(this, getString(R.string.text_auto_76), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        db.collection("users").whereEqualTo("username", newUsername).get().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                boolean isTaken = false;
+                for (QueryDocumentSnapshot document : task.getResult()) {
+                    if (!document.getId().equals(uid)) {
+                        isTaken = true;
+                        break;
+                    }
+                }
+                if (isTaken) {
+                    String suggested = generateNicknameSuggestion(newUsername);
+                    etUsername.setError(getString(R.string.text_auto_77) + suggested);
+                } else {
+                    checkEmailAndSave(newName, newUsername, newEmail);
+                }
+            }
+        });
+    }
+
+    private void checkEmailAndSave(String name, String username, String email) {
+        db.collection("users").whereEqualTo("email", email).get().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                boolean emailTaken = false;
+                for (QueryDocumentSnapshot document : task.getResult()) {
+                    if (!document.getId().equals(uid)) {
+                        emailTaken = true;
+                        break;
+                    }
+                }
+                if (emailTaken) {
+                    etEmail.setError(getString(R.string.text_auto_78));
+                } else {
+                    executeFinalUpdate(name, username, email);
+                }
+            }
+        });
+    }
+
+    private String generateNicknameSuggestion(String baseName) {
+        return baseName.toLowerCase() + ((int) (Math.random() * 900) + 100);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Каждый раз, когда мы возвращаемся на этот экран,
+        // данные будут подтягиваться из Firestore заново
+        loadUserData();
+    }
+
+}
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\EmailValidator.java ---
+
+package com.example.oztrip;
+
+import android.util.Log;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+public class EmailValidator {
+
+    /**
+     * Проверяет, существует ли email‑ящик.
+     * Возвращает:
+     *  "valid" – ящик принял адрес
+     *  "invalid" – ящик не существует
+     *  "unknown" – не удалось проверить (сервер не ответил, нет MX и т.п.)
+     */
+    public static String verify(String email) {
+        try {
+            if (!email.matches("^[^@]+@[^@]+\\.[^@]+$")) return "invalid";
+
+            String domain = email.substring(email.indexOf("@") + 1);
+
+            // 1. Получаем MX-записи через Google DNS-over-HTTPS
+            List<String> mxServers = getMxRecordsOverHttps(domain);
+            if (mxServers.isEmpty()) return "invalid";
+
+            // 2. Пробуем подключиться к первому MX и проверить ящик
+            for (String mx : mxServers) {
+                boolean result = smtpCheck(mx, email);
+                if (result) return "valid";
+            }
+            return "invalid"; // ни один сервер не подтвердил
+
+        } catch (Exception e) {
+            Log.e("EmailValidator", "Verification error", e);
+            return "unknown";
+        }
+    }
+
+    // Получение MX-записей через Google DNS-over-HTTPS
+    private static List<String> getMxRecordsOverHttps(String domain) throws Exception {
+        List<String> servers = new ArrayList<>();
+        String urlStr = "https://dns.google/resolve?name=" + domain + "&type=MX";
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setReadTimeout(5000);
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+        StringBuilder response = new StringBuilder();
+        String line;
+        while ((line = in.readLine()) != null) {
+            response.append(line);
+        }
+        in.close();
+
+        JSONObject json = new JSONObject(response.toString());
+        if (json.has("Answer")) {
+            JSONArray answers = json.getJSONArray("Answer");
+            for (int i = 0; i < answers.length(); i++) {
+                JSONObject answer = answers.getJSONObject(i);
+                String data = answer.getString("data");
+                // Запись вида "10 mail.example.com."
+                String[] parts = data.split(" ");
+                String host = parts[parts.length - 1];
+                if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
+                servers.add(host);
+            }
+        }
+        return servers;
+    }
+
+    // SMTP-рукопожатие (без изменений)
+    private static boolean smtpCheck(String mxHost, String email) {
+        try {
+            InetAddress ip = InetAddress.getByName(mxHost);
+            Socket socket = new Socket();
+            socket.connect(new InetSocketAddress(ip, 25), 5000);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintStream writer = new PrintStream(socket.getOutputStream());
+
+            String response = reader.readLine();
+            if (!response.startsWith("220")) return false;
+
+            writer.println("HELO oztrip.app");
+            writer.flush();
+            response = reader.readLine();
+            if (!response.startsWith("250")) return false;
+
+            writer.println("MAIL FROM:<check@oztrip.app>");
+            writer.flush();
+            response = reader.readLine();
+            if (!response.startsWith("250")) return false;
+
+            writer.println("RCPT TO:<" + email + ">");
+            writer.flush();
+            response = reader.readLine();
+            boolean valid = (response != null && response.startsWith("250"));
+
+            writer.println("QUIT");
+            writer.flush();
+            socket.close();
+            return valid;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\IconAdapter.java ---
+
+package com.example.oztrip;
+
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
+public class IconAdapter extends RecyclerView.Adapter<IconAdapter.ViewHolder> {
+    private final int[] icons;
+    private final OnIconClickListener listener;
+
+    public interface OnIconClickListener {
+        void onIconClick(int iconRes);
+    }
+
+    public IconAdapter(int[] icons, OnIconClickListener listener) {
+        this.icons = icons;
+        this.listener = listener;
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        ImageView imageView = new ImageView(parent.getContext());
+        // Устанавливаем размер иконки 80dp
+        int size = (int) (80 * parent.getContext().getResources().getDisplayMetrics().density);
+        imageView.setLayoutParams(new ViewGroup.LayoutParams(size, size));
+        imageView.setPadding(20, 20, 20, 20);
+        imageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        return new ViewHolder(imageView);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        int resId = icons[position];
+        ((ImageView) holder.itemView).setImageResource(resId);
+        holder.itemView.setOnClickListener(v -> listener.onIconClick(resId));
+    }
+
+    @Override
+    public int getItemCount() {
+        return icons.length;
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+        }
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\LatLngAdapter.java ---
+
+package com.example.oztrip;
+
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import org.maplibre.android.geometry.LatLng;
+import java.io.IOException;
+
+// Этот класс говорит Гсону: getString(R.string.text_auto_79)
+public class LatLngAdapter extends TypeAdapter<LatLng> {
+    @Override
+    public void write(JsonWriter out, LatLng value) throws IOException {
+        out.beginObject();
+        out.name("lat").value(value.getLatitude());
+        out.name("lon").value(value.getLongitude());
+        out.endObject();
+    }
+
+    @Override
+    public LatLng read(JsonReader reader) throws IOException {
+        double lat = 0, lng = 0;
+        reader.beginObject();
+        while (reader.hasNext()) {
+            String name = reader.nextName();
+            if (name.equals("lat")) {           // <-- было "latitude"
+                lat = reader.nextDouble();
+            } else if (name.equals("lon")) {    // <-- было "longitude"
+                lng = reader.nextDouble();
+            } else {
+                reader.skipValue();
+            }
+        }
+        reader.endObject();
+        return new LatLng(lat, lng);
+    }
+
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\LiquidSegmentedControl.java ---
+
+package com.example.oztrip;
+
+import android.animation.ArgbEvaluator;
+import android.animation.ValueAnimator;
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.Shader;
+import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.animation.OvershootInterpolator;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class LiquidSegmentedControl extends View {
+    private float bgWidth;   // ширина видимого фона (300dp)
+    private float bgLeft;    // отступ слева для центрирования
+    private Paint bgPaint, sliderPaint, textPaint, strokePaint;
+    private RectF bgRect, sliderRect;
+    private List<String> tabs = new ArrayList<>();
+    private int selectedIndex = 0;
+    private float sliderPosition = 0; // 0.0 to tabs.size() - 1
+    private ValueAnimator animator;
+    private OnTabSelectedListener listener;
+
+    public interface OnTabSelectedListener {
+        void onTabSelected(int index);
+    }
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        bgWidth = dpToPx(300);
+        bgLeft = (w - bgWidth) / 2f;
+    }
+    public LiquidSegmentedControl(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+    private boolean darkMode = false;
+
+    public void setDarkMode(boolean dark) {
+        darkMode = dark;
+        if (dark) {
+            bgPaint.setColor(Color.parseColor("#2A1A00"));
+            strokePaint.setColor(Color.parseColor("#33FFFFFF"));
+            sliderPaint.setColor(Color.parseColor("#66FF9800"));
+        } else {
+            bgPaint.setColor(Color.parseColor("#B3FFFFFF"));
+            strokePaint.setColor(Color.parseColor("#E6FFFFFF"));
+            sliderPaint.setColor(Color.WHITE);
+        }
+        bgPaint.setShader(null);
+        invalidate();
+    }
+    private void init() {
+        // 1. Фон getString(R.string.text_auto_80) (полупрозрачный белый с градиентом)
+        bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bgPaint.setStyle(Paint.Style.FILL);
+        bgPaint.setColor(Color.parseColor("#B3FFFFFF")); // 70% белый
+
+        // 2. Обводка getString(R.string.text_auto_81) (тонкая белая)
+        strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(2f);
+        strokePaint.setColor(Color.parseColor("#E6FFFFFF")); // 90% белый
+
+        // 3. Активный ползунок getString(R.string.text_auto_82) (белый с мягкой тенью)
+        sliderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        sliderPaint.setStyle(Paint.Style.FILL);
+        sliderPaint.setColor(Color.WHITE);
+        sliderPaint.setShadowLayer(15f, 0f, dpToPx(2), Color.parseColor("#26000000")); // Мягкая тень
+
+        // 4. Текст (серый/оранжевый)
+        textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setTextSize(dpToPx(16));
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setFakeBoldText(true);
+
+        bgRect = new RectF();
+        sliderRect = new RectF();
+
+        // Тестовые вкладки
+        tabs.add(getContext().getString(R.string.text_auto_83));
+        tabs.add(getContext().getString(R.string.text_auto_84));
+
+
+        setLayerType(LAYER_TYPE_SOFTWARE, null); // Для теней на старых Android
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        float h = getHeight();
+
+        // Сдвигаем рисование на bgLeft, чтобы фон был по центру
+        canvas.save();
+        canvas.translate(bgLeft, 0);
+
+        float w = bgWidth;      // работаем с шириной фона
+        float r = h / 2f;
+
+        // --- 1. Рисуем фон стекла (только внутри 300dp) ---
+        bgRect.set(0, 0, w, h);
+        LinearGradient glassShader = new LinearGradient(0, 0, 0, h,
+                new int[]{Color.parseColor("#E6FFFFFF"), Color.parseColor("#B3FFFFFF")},
+                null, Shader.TileMode.CLAMP);
+        bgPaint.setShader(glassShader);
+        canvas.drawRoundRect(bgRect, r, r, bgPaint);
+        canvas.drawRoundRect(bgRect, r, r, strokePaint);
+
+        // --- 2. Рисуем активный ползунок ---
+        float tabWidth = w / tabs.size();
+        float sliderPadding = dpToPx(6f);   // используем float-версию dpToPx
+
+        float sliderLeft = sliderPadding + (sliderPosition * tabWidth);
+        float sliderRight = (sliderPadding + tabWidth) + (sliderPosition * tabWidth) - (sliderPadding * 2);
+        sliderRect.set(sliderLeft, sliderPadding, sliderRight, h - sliderPadding);
+
+        float currentAnimValue = animator != null ? (float) animator.getAnimatedValue() : 1f;
+        canvas.drawRoundRect(sliderRect, r - sliderPadding, r - sliderPadding, sliderPaint);
+
+        // --- 3. Рисуем текст ---
+        Paint.FontMetrics fm = textPaint.getFontMetrics();
+        float textY = h / 2f - (fm.descent + fm.ascent) / 2f;
+        ArgbEvaluator colorEval = new ArgbEvaluator();
+
+        for (int i = 0; i < tabs.size(); i++) {
+            float tabCenterX = (tabWidth * i) + (tabWidth / 2f);
+            float ratio = 1.0f - Math.abs(sliderPosition - i);
+            if (ratio < 0) ratio = 0;
+
+            int textColor;
+            if (ratio > 0.5f) {
+                // Активная вкладка: оранжевая в светлой теме, белая в тёмной
+                textColor = darkMode ? Color.WHITE : Color.parseColor("#FF9800");
+            } else {
+                // Неактивная вкладка: серый (светлый или тёмный в зависимости от темы)
+                textColor = darkMode ? Color.parseColor("#B0B0B0") : Color.parseColor("#666666");
+            }
+            textPaint.setColor(textColor);
+            canvas.drawText(tabs.get(i), tabCenterX, textY, textPaint);
+        }
+
+        canvas.restore();  // восстанавливаем исходное состояние canvas
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (!isEnabled()) return false;
+
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            float x = event.getX() - bgLeft;   // переводим в координаты фона
+            if (x < 0 || x > bgWidth) return false; // игнорируем касания вне фона
+
+            float tabWidth = bgWidth / tabs.size();
+            int clickedIndex = (int) (x / tabWidth);
+            if (clickedIndex != selectedIndex && clickedIndex < tabs.size()) {
+                setSelectedIndex(clickedIndex);
+            }
+            return true;
+        }
+        return super.onTouchEvent(event);
+    }
+
+    public void setSelectedIndex(int index) {
+        if (animator != null) animator.cancel();
+        selectedIndex = index;
+
+        // Анимация Liquid перемещения с эффектом Overshoot
+        animator = ValueAnimator.ofFloat(sliderPosition, index);
+        animator.setDuration(450);
+        animator.setInterpolator(new OvershootInterpolator(1.4f)); // getString(R.string.text_auto_85) эффект
+        animator.addUpdateListener(animation -> {
+            sliderPosition = (float) animation.getAnimatedValue();
+            invalidate(); // Перерисовать кадр
+        });
+        animator.start();
+
+        if (listener != null) listener.onTabSelected(index);
+    }
+
+    public void setOnTabSelectedListener(OnTabSelectedListener listener) {
+        this.listener = listener;
+    }
+
+    private float dpToPx(int dp) {
+        return dp * getResources().getDisplayMetrics().density;
+    }
+    private float dpToPx(float dp) { return dp * getResources().getDisplayMetrics().density; }
+}

@@ -1,0 +1,159 @@
+
+
+// --- FILE: ./app/src/main/res\anim\shake.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <translate
+        android:duration="100"
+        android:fromXDelta="-10"
+        android:toXDelta="10"
+        android:repeatCount="4"
+        android:repeatMode="reverse" />
+</set>
+
+// --- FILE: ./app/src/main/res\anim\slide_down.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="300">
+    <translate
+        android:fromYDelta="0"
+        android:toYDelta="100%"
+        android:interpolator="@android:anim/accelerate_interpolator" />
+    <alpha
+        android:fromAlpha="1.0"
+        android:toAlpha="0.0" />
+</set>
+
+// --- FILE: ./app/src/main/res\anim\slide_up.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="400">
+    <translate
+        android:fromYDelta="100%"
+        android:toYDelta="0"
+        android:interpolator="@android:anim/decelerate_interpolator" />
+    <alpha
+        android:fromAlpha="0.0"
+        android:toAlpha="1.0" />
+</set>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_btn_action_luxury.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#99FF9800" />
+    <stroke
+        android:width="1.2dp"
+        android:color="#33FFFFFF" />
+    <size android:width="44dp" android:height="44dp" />
+</shape>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_btn_luxury_toggle.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#33000000" />
+            <padding android:bottom="2dp" android:left="2dp" android:right="2dp" android:top="2dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#CC5500"
+                android:endColor="#FF9800"
+                android:angle="270"
+                android:type="linear" />
+            <stroke
+                android:width="1dp"
+                android:color="#33FFFFFF" />
+            <size android:width="48dp" android:height="48dp" />
+        </shape>
+    </item>
+</layer-list>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_btn_target_luxury.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#1Aff9800" />
+            <padding android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#1E1E1E" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#FF9800" />
+            <size android:width="44dp" android:height="44dp" />
+        </shape>
+    </item>
+</layer-list>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_circle_glass_orange.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#33FF9800" />
+    <stroke android:width="1.5dp" android:color="#80FF9800" />
+</shape>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_circle_orange.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#66FF9800" />
+    <stroke android:width="2dp" android:color="#1E1E1E" />
+</shape>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_circle_photo_button.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#66FF9800" />
+    <stroke android:width="2dp" android:color="#1E1E1E" />
+    <size android:width="56dp" android:height="56dp" />
+</shape>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_compass_luxury.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:startColor="#FF9800"
+        android:endColor="#CC5500"
+        android:angle="45" />
+    <stroke
+        android:width="1.5dp"
+        android:color="#33FFFFFF" />
+    <size android:width="44dp" android:height="44dp" />
+</shape>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_handle_orange.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FF9800" />
+    <corners android:radius="2dp" />
+</shape>
+
+// --- FILE: ./app/src/main/res\drawable-night\bg_icon_glass.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#33FF9800" />
+    <corners android:radius="150dp" />
+    <stroke android:width="1.5dp" android:color="#80FF9800" />
+</shape>

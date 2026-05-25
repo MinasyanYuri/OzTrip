@@ -1,0 +1,413 @@
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\EmailValidator.java ---
+
+package com.example.oztrip;
+
+import android.util.Log;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+public class EmailValidator {
+
+    /**
+     * Проверяет, существует ли email‑ящик.
+     * Возвращает:
+     *  "valid" – ящик принял адрес
+     *  "invalid" – ящик не существует
+     *  "unknown" – не удалось проверить (сервер не ответил, нет MX и т.п.)
+     */
+    public static String verify(String email) {
+        try {
+            if (!email.matches("^[^@]+@[^@]+\\.[^@]+$")) return "invalid";
+
+            String domain = email.substring(email.indexOf("@") + 1);
+
+            // 1. Получаем MX-записи через Google DNS-over-HTTPS
+            List<String> mxServers = getMxRecordsOverHttps(domain);
+            if (mxServers.isEmpty()) return "invalid";
+
+            // 2. Пробуем подключиться к первому MX и проверить ящик
+            for (String mx : mxServers) {
+                boolean result = smtpCheck(mx, email);
+                if (result) return "valid";
+            }
+            return "invalid"; // ни один сервер не подтвердил
+
+        } catch (Exception e) {
+            Log.e("EmailValidator", "Verification error", e);
+            return "unknown";
+        }
+    }
+
+    // Получение MX-записей через Google DNS-over-HTTPS
+    private static List<String> getMxRecordsOverHttps(String domain) throws Exception {
+        List<String> servers = new ArrayList<>();
+        String urlStr = "https://dns.google/resolve?name=" + domain + "&type=MX";
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setReadTimeout(5000);
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+        StringBuilder response = new StringBuilder();
+        String line;
+        while ((line = in.readLine()) != null) {
+            response.append(line);
+        }
+        in.close();
+
+        JSONObject json = new JSONObject(response.toString());
+        if (json.has("Answer")) {
+            JSONArray answers = json.getJSONArray("Answer");
+            for (int i = 0; i < answers.length(); i++) {
+                JSONObject answer = answers.getJSONObject(i);
+                String data = answer.getString("data");
+                // Запись вида "10 mail.example.com."
+                String[] parts = data.split(" ");
+                String host = parts[parts.length - 1];
+                if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
+                servers.add(host);
+            }
+        }
+        return servers;
+    }
+
+    // SMTP-рукопожатие (без изменений)
+    private static boolean smtpCheck(String mxHost, String email) {
+        try {
+            InetAddress ip = InetAddress.getByName(mxHost);
+            Socket socket = new Socket();
+            socket.connect(new InetSocketAddress(ip, 25), 5000);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintStream writer = new PrintStream(socket.getOutputStream());
+
+            String response = reader.readLine();
+            if (!response.startsWith("220")) return false;
+
+            writer.println("HELO oztrip.app");
+            writer.flush();
+            response = reader.readLine();
+            if (!response.startsWith("250")) return false;
+
+            writer.println("MAIL FROM:<check@oztrip.app>");
+            writer.flush();
+            response = reader.readLine();
+            if (!response.startsWith("250")) return false;
+
+            writer.println("RCPT TO:<" + email + ">");
+            writer.flush();
+            response = reader.readLine();
+            boolean valid = (response != null && response.startsWith("250"));
+
+            writer.println("QUIT");
+            writer.flush();
+            socket.close();
+            return valid;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\IconAdapter.java ---
+
+package com.example.oztrip;
+
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
+public class IconAdapter extends RecyclerView.Adapter<IconAdapter.ViewHolder> {
+    private final int[] icons;
+    private final OnIconClickListener listener;
+
+    public interface OnIconClickListener {
+        void onIconClick(int iconRes);
+    }
+
+    public IconAdapter(int[] icons, OnIconClickListener listener) {
+        this.icons = icons;
+        this.listener = listener;
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        ImageView imageView = new ImageView(parent.getContext());
+        // Устанавливаем размер иконки 80dp
+        int size = (int) (80 * parent.getContext().getResources().getDisplayMetrics().density);
+        imageView.setLayoutParams(new ViewGroup.LayoutParams(size, size));
+        imageView.setPadding(20, 20, 20, 20);
+        imageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        return new ViewHolder(imageView);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        int resId = icons[position];
+        ((ImageView) holder.itemView).setImageResource(resId);
+        holder.itemView.setOnClickListener(v -> listener.onIconClick(resId));
+    }
+
+    @Override
+    public int getItemCount() {
+        return icons.length;
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+        }
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\LatLngAdapter.java ---
+
+package com.example.oztrip;
+
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import org.maplibre.android.geometry.LatLng;
+import java.io.IOException;
+
+// Этот класс говорит Гсону: getString(R.string.text_auto_79)
+public class LatLngAdapter extends TypeAdapter<LatLng> {
+    @Override
+    public void write(JsonWriter out, LatLng value) throws IOException {
+        out.beginObject();
+        out.name("lat").value(value.getLatitude());
+        out.name("lon").value(value.getLongitude());
+        out.endObject();
+    }
+
+    @Override
+    public LatLng read(JsonReader reader) throws IOException {
+        double lat = 0, lng = 0;
+        reader.beginObject();
+        while (reader.hasNext()) {
+            String name = reader.nextName();
+            if (name.equals("lat")) {           // <-- было "latitude"
+                lat = reader.nextDouble();
+            } else if (name.equals("lon")) {    // <-- было "longitude"
+                lng = reader.nextDouble();
+            } else {
+                reader.skipValue();
+            }
+        }
+        reader.endObject();
+        return new LatLng(lat, lng);
+    }
+
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\LiquidSegmentedControl.java ---
+
+package com.example.oztrip;
+
+import android.animation.ArgbEvaluator;
+import android.animation.ValueAnimator;
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.Shader;
+import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.animation.OvershootInterpolator;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class LiquidSegmentedControl extends View {
+    private float bgWidth;   // ширина видимого фона (300dp)
+    private float bgLeft;    // отступ слева для центрирования
+    private Paint bgPaint, sliderPaint, textPaint, strokePaint;
+    private RectF bgRect, sliderRect;
+    private List<String> tabs = new ArrayList<>();
+    private int selectedIndex = 0;
+    private float sliderPosition = 0; // 0.0 to tabs.size() - 1
+    private ValueAnimator animator;
+    private OnTabSelectedListener listener;
+
+    public interface OnTabSelectedListener {
+        void onTabSelected(int index);
+    }
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        bgWidth = dpToPx(300);
+        bgLeft = (w - bgWidth) / 2f;
+    }
+    public LiquidSegmentedControl(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+    private boolean darkMode = false;
+
+    public void setDarkMode(boolean dark) {
+        darkMode = dark;
+        if (dark) {
+            bgPaint.setColor(Color.parseColor("#2A1A00"));
+            strokePaint.setColor(Color.parseColor("#33FFFFFF"));
+            sliderPaint.setColor(Color.parseColor("#66FF9800"));
+        } else {
+            bgPaint.setColor(Color.parseColor("#B3FFFFFF"));
+            strokePaint.setColor(Color.parseColor("#E6FFFFFF"));
+            sliderPaint.setColor(Color.WHITE);
+        }
+        bgPaint.setShader(null);
+        invalidate();
+    }
+    private void init() {
+        // 1. Фон getString(R.string.text_auto_80) (полупрозрачный белый с градиентом)
+        bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bgPaint.setStyle(Paint.Style.FILL);
+        bgPaint.setColor(Color.parseColor("#B3FFFFFF")); // 70% белый
+
+        // 2. Обводка getString(R.string.text_auto_81) (тонкая белая)
+        strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(2f);
+        strokePaint.setColor(Color.parseColor("#E6FFFFFF")); // 90% белый
+
+        // 3. Активный ползунок getString(R.string.text_auto_82) (белый с мягкой тенью)
+        sliderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        sliderPaint.setStyle(Paint.Style.FILL);
+        sliderPaint.setColor(Color.WHITE);
+        sliderPaint.setShadowLayer(15f, 0f, dpToPx(2), Color.parseColor("#26000000")); // Мягкая тень
+
+        // 4. Текст (серый/оранжевый)
+        textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setTextSize(dpToPx(16));
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setFakeBoldText(true);
+
+        bgRect = new RectF();
+        sliderRect = new RectF();
+
+        // Тестовые вкладки
+        tabs.add(getContext().getString(R.string.text_auto_83));
+        tabs.add(getContext().getString(R.string.text_auto_84));
+
+
+        setLayerType(LAYER_TYPE_SOFTWARE, null); // Для теней на старых Android
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        float h = getHeight();
+
+        // Сдвигаем рисование на bgLeft, чтобы фон был по центру
+        canvas.save();
+        canvas.translate(bgLeft, 0);
+
+        float w = bgWidth;      // работаем с шириной фона
+        float r = h / 2f;
+
+        // --- 1. Рисуем фон стекла (только внутри 300dp) ---
+        bgRect.set(0, 0, w, h);
+        LinearGradient glassShader = new LinearGradient(0, 0, 0, h,
+                new int[]{Color.parseColor("#E6FFFFFF"), Color.parseColor("#B3FFFFFF")},
+                null, Shader.TileMode.CLAMP);
+        bgPaint.setShader(glassShader);
+        canvas.drawRoundRect(bgRect, r, r, bgPaint);
+        canvas.drawRoundRect(bgRect, r, r, strokePaint);
+
+        // --- 2. Рисуем активный ползунок ---
+        float tabWidth = w / tabs.size();
+        float sliderPadding = dpToPx(6f);   // используем float-версию dpToPx
+
+        float sliderLeft = sliderPadding + (sliderPosition * tabWidth);
+        float sliderRight = (sliderPadding + tabWidth) + (sliderPosition * tabWidth) - (sliderPadding * 2);
+        sliderRect.set(sliderLeft, sliderPadding, sliderRight, h - sliderPadding);
+
+        float currentAnimValue = animator != null ? (float) animator.getAnimatedValue() : 1f;
+        canvas.drawRoundRect(sliderRect, r - sliderPadding, r - sliderPadding, sliderPaint);
+
+        // --- 3. Рисуем текст ---
+        Paint.FontMetrics fm = textPaint.getFontMetrics();
+        float textY = h / 2f - (fm.descent + fm.ascent) / 2f;
+        ArgbEvaluator colorEval = new ArgbEvaluator();
+
+        for (int i = 0; i < tabs.size(); i++) {
+            float tabCenterX = (tabWidth * i) + (tabWidth / 2f);
+            float ratio = 1.0f - Math.abs(sliderPosition - i);
+            if (ratio < 0) ratio = 0;
+
+            int textColor;
+            if (ratio > 0.5f) {
+                // Активная вкладка: оранжевая в светлой теме, белая в тёмной
+                textColor = darkMode ? Color.WHITE : Color.parseColor("#FF9800");
+            } else {
+                // Неактивная вкладка: серый (светлый или тёмный в зависимости от темы)
+                textColor = darkMode ? Color.parseColor("#B0B0B0") : Color.parseColor("#666666");
+            }
+            textPaint.setColor(textColor);
+            canvas.drawText(tabs.get(i), tabCenterX, textY, textPaint);
+        }
+
+        canvas.restore();  // восстанавливаем исходное состояние canvas
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (!isEnabled()) return false;
+
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            float x = event.getX() - bgLeft;   // переводим в координаты фона
+            if (x < 0 || x > bgWidth) return false; // игнорируем касания вне фона
+
+            float tabWidth = bgWidth / tabs.size();
+            int clickedIndex = (int) (x / tabWidth);
+            if (clickedIndex != selectedIndex && clickedIndex < tabs.size()) {
+                setSelectedIndex(clickedIndex);
+            }
+            return true;
+        }
+        return super.onTouchEvent(event);
+    }
+
+    public void setSelectedIndex(int index) {
+        if (animator != null) animator.cancel();
+        selectedIndex = index;
+
+        // Анимация Liquid перемещения с эффектом Overshoot
+        animator = ValueAnimator.ofFloat(sliderPosition, index);
+        animator.setDuration(450);
+        animator.setInterpolator(new OvershootInterpolator(1.4f)); // getString(R.string.text_auto_85) эффект
+        animator.addUpdateListener(animation -> {
+            sliderPosition = (float) animation.getAnimatedValue();
+            invalidate(); // Перерисовать кадр
+        });
+        animator.start();
+
+        if (listener != null) listener.onTabSelected(index);
+    }
+
+    public void setOnTabSelectedListener(OnTabSelectedListener listener) {
+        this.listener = listener;
+    }
+
+    private float dpToPx(int dp) {
+        return dp * getResources().getDisplayMetrics().density;
+    }
+    private float dpToPx(float dp) { return dp * getResources().getDisplayMetrics().density; }
+}

@@ -1,0 +1,777 @@
+
+
+// --- FILE: ./app/src/main/res\layout\bottom_sheet_travel_lists.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:minWidth="120dp"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet_luxury"
+    android:padding="20dp">
+
+    <!-- Ручка -->
+    <View
+        android:layout_width="45dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_handle_orange"
+        android:layout_marginBottom="20dp" />
+
+    <!-- Заголовок с иконкой и кнопкой "Выбрать" -->
+    <LinearLayout
+        android:id="@+id/headerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_list_travel"
+            app:tint="#FF9800"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/text_52"
+            android:textColor="#FF9800"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.15" />
+
+        <TextView
+            android:id="@+id/btnSelect"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/text_53"
+            android:textColor="#FF9800"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:padding="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Панель выбора (по умолчанию скрыта) -->
+    <LinearLayout
+        android:id="@+id/selectionToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp"
+        android:background="@android:color/transparent"
+        android:visibility="gone"
+        android:paddingVertical="4dp">
+
+        <TextView
+            android:id="@+id/tvSelectedCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/text_54"
+            android:textColor="#FF9800"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnCancelSelection"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="@string/text_55"
+            android:textColor="#B0B0B0"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:textAllCaps="false"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnDeleteSelected"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="@string/text_56"
+            android:textColor="#FF5252"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:textAllCaps="false"
+            android:enabled="false" />
+    </LinearLayout>
+
+    <!-- Поле поиска -->
+    <!-- Поле поиска (стеклянное, без квадрата) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_search_glass"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="12dp">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_search_mini"
+            app:tint="#80FFFFFF" />
+
+        <EditText
+            android:id="@+id/etSearchList"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:hint="@string/text_57"
+            android:textColor="?colorOnPrimary"
+            android:textColorHint="#66FFFFFF"
+            android:background="@null"
+            android:textSize="14sp"
+            android:inputType="text"
+            android:paddingHorizontal="8dp" />
+    </LinearLayout>
+
+    <!-- Список поездок -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvSheetTravelLists"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="300dp"
+        android:overScrollMode="never"
+        android:paddingVertical="4dp" />
+
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\dialog_about.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
+    android:background="@drawable/bg_dialog_about">
+
+    <ImageView
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:src="@mipmap/ic_launcher"
+        android:contentDescription="@string/app_name" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textColor="?android:textColorPrimary"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/text_91"
+        android:textColor="?android:textColorSecondary"
+        android:textSize="14sp"
+        android:layout_marginTop="4dp" />
+
+    <View
+        android:layout_width="60dp"
+        android:layout_height="2dp"
+        android:background="#FF9800"
+        android:layout_marginVertical="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/text_auto_175"
+        android:textColor="?android:textColorPrimary"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:lineSpacingExtra="4dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnOkAbout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/ok"
+        android:textColor="#FFFFFF"
+        app:backgroundTint="#FF9800"
+        app:cornerRadius="24dp"
+        android:layout_marginTop="20dp" />
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\dialog_confirm_auth.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="20dp"
+    app:cardCornerRadius="28dp"
+    app:cardBackgroundColor="#1A1A1A"
+    app:strokeColor="#33FFFFFF"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:gravity="center">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_lock_idle_lock"
+            app:tint="#FF9500" />
+
+        <TextView
+            android:id="@+id/tvDialogTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/text_58"
+            android:textColor="?attr/colorSurface"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/text_59"
+            android:textColor="#999"
+            android:textSize="14sp" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilConfirmPass"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            app:passwordToggleEnabled="true"
+            app:passwordToggleTint="#FF9500"
+            app:boxStrokeColor="#FF9500"
+            app:hintTextColor="#FF9500"
+            android:hint="@string/text_61">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etConfirmPass"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword"
+                android:textColor="#FFF" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnConfirmAuth"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="24dp"
+            android:text="@string/text_60"
+            android:backgroundTint="#FF9500"
+            android:textColor="#000"
+            app:cornerRadius="16dp" />
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
+
+// --- FILE: ./app/src/main/res\layout\dialog_confirm_delete.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/bg_dialog_premium">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/text_62"
+        android:textColor="#FF5252"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:id="@+id/tvConfirmMessage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/text_63"
+        android:textColor="#CCFFFFFF"
+        android:textSize="14sp"
+        android:layout_marginBottom="24dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btnConfirmCancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="@string/text_55"
+            android:textColor="#B0B0B0"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:paddingHorizontal="12dp"
+            android:textAllCaps="false"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnConfirmDelete"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="@string/text_56"
+            android:textColor="#FF5252"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:paddingHorizontal="12dp"
+            android:textAllCaps="false"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\dialog_delete_point.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/bg_dialog_premium">
+
+    <ImageView
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_trash_premium"
+        android:background="@drawable/bg_circle_red"
+        android:padding="16dp"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="@string/text_64"
+        android:textColor="#FF5252"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:id="@+id/tvDeleteMessage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="@string/text_65"
+        android:textColor="#CCFFFFFF"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:layout_marginBottom="24dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btnCancelDelete"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="@string/text_55"
+            android:textColor="#B0B0B0"
+            android:background="@drawable/bg_button_secondary"
+            android:textAllCaps="false"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnConfirmDelete"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="@string/text_56"
+            android:textColor="?attr/colorSurface"
+            android:background="@drawable/bg_button_delete"
+            android:textAllCaps="false"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\dialog_fullscreen_photo.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E6000000"
+    android:clickable="true"
+    android:focusable="true">
+
+    <ImageView
+        android:id="@+id/ivFullscreenPhoto"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter" />
+
+    <ImageView
+        android:id="@+id/btnCloseFullscreen"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:src="@drawable/ic_close_premium"
+        android:background="@drawable/bg_circle_close"
+        android:padding="12dp" />
+
+</FrameLayout>
+
+// --- FILE: ./app/src/main/res\layout\dialog_onboarding.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog_about"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Добро пожаловать в OzTrip!"
+        android:textColor="?android:textColorPrimary"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="• Нажмите на карту, чтобы найти место.\n• Используйте поиск, чтобы быстро перемещаться.\n• Кнопка «Сохранить» добавляет точку в текущую поездку.\n• Вкладка «ИИ» — ваш умный помощник.\n• Смахните вверх карточку, чтобы увидеть детали места."
+        android:textColor="?android:textColorSecondary"
+        android:textSize="14sp" />
+
+    <Button
+        android:id="@+id/btnGotIt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="16dp"
+        android:text="Понятно!"
+        android:backgroundTint="#FF9800"
+        android:textColor="#FFF" />
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\dialog_rename.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/bg_dialog_premium">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/text_66"
+        android:textColor="#FF9800"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="20dp" />
+
+    <EditText
+        android:id="@+id/etNewName"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:hint="@string/text_68"
+        android:textColorHint="#B0B0B0"
+        android:textColor="?attr/colorSurface"
+        android:background="@drawable/bg_edittext_premium"
+        android:paddingHorizontal="20dp"
+        android:fontFamily="sans-serif-medium"
+        android:textSize="16sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="24dp"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btnCancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="@string/text_55"
+            android:textColor="#B0B0B0"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:paddingHorizontal="12dp"
+            android:textAllCaps="false"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="@string/text_23"
+            android:textColor="#FF9800"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:paddingHorizontal="12dp"
+            android:textAllCaps="false"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#33FFFFFF"
+        android:layout_marginVertical="16dp" />
+
+    <Button
+        android:id="@+id/btnDelete"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:text="@string/text_67"
+        android:textColor="#FF5252"
+        android:background="@drawable/bg_delete_button"
+        android:paddingHorizontal="12dp"
+        android:textAllCaps="false"
+        android:gravity="center" />
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\dialog_search.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="@drawable/bg_dialog_premium">
+
+    <ImageView
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_search_premium"
+        android:background="@drawable/bg_circle_orange"
+        android:padding="14dp"
+        android:layout_marginBottom="12dp"
+        app:tint="?attr/colorSurface" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="@string/text_69"
+        android:textColor="#FF9800"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <EditText
+        android:id="@+id/etSearchQuery"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:hint="@string/text_71"
+        android:textColorHint="#999999"
+        android:textColor="?attr/colorSurface"
+        android:background="@drawable/bg_edittext_premium"
+        android:paddingHorizontal="16dp"
+        android:textSize="16sp"
+        android:imeOptions="actionSearch"
+        android:inputType="text"
+        android:layout_marginBottom="20dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCancelSearch"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="@string/text_55"
+            android:textColor="#B0B0B0"
+            app:backgroundTint="#33FFFFFF"
+            app:strokeColor="#66FFFFFF"
+            app:strokeWidth="1.5dp"
+            app:cornerRadius="28dp"
+            android:textAllCaps="false"
+            android:layout_marginEnd="8dp"
+            android:textSize="15sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnStartSearch"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="@string/text_70"
+            android:textColor="?attr/colorSurface"
+            app:backgroundTint="#FF9800"
+            app:strokeColor="?attr/colorSurface"
+            app:strokeWidth="1.5dp"
+            app:cornerRadius="28dp"
+            android:textAllCaps="false"
+            android:layout_marginStart="8dp"
+            android:textSize="15sp" />
+    </LinearLayout>
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\fragment_ai.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/bg_orange_glass"
+    android:padding="12dp">
+
+    <!-- Заголовок -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/text_72"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="?colorOnPrimary"
+        android:gravity="center"
+        android:layout_marginBottom="8dp"/>
+
+    <!-- Список сообщений -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/chatRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp"/>
+
+    <!-- Панель ввода -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_chat_input"
+        android:elevation="4dp"
+        android:layout_marginBottom="100dp">
+
+        <EditText
+            android:id="@+id/messageInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="@string/text_73"
+            android:textColorHint="#80FFFFFF"
+            android:textColor="?colorOnPrimary"
+            android:background="@android:color/transparent"
+            android:padding="12dp"
+            android:inputType="textMultiLine"
+            android:maxLines="3"/>
+
+        <ImageView
+            android:id="@+id/sendButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_send"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/text_74"
+            android:padding="10dp"/>
+    </LinearLayout>
+
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\item_message.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingVertical="6dp">
+
+    <TextView
+        android:id="@+id/messageText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxWidth="280dp"
+        android:padding="12dp"
+        android:textSize="16sp"
+        android:textColor="?android:textColorPrimary"
+        android:background="@drawable/bg_message_bot"
+        android:layout_gravity="start"/>
+</LinearLayout>
+
+// --- FILE: ./app/src/main/res\layout\item_travel_list.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="44dp"
+    android:layout_marginHorizontal="4dp"
+    app:cardCornerRadius="22dp"
+    app:cardElevation="2dp"
+    app:cardBackgroundColor="#CCFFFFFF"
+    app:strokeWidth="1.5dp"
+    app:strokeColor="#FFFFFF"
+    android:stateListAnimator="@null">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="8dp">
+
+        <TextView
+            android:id="@+id/tvListName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1" />
+
+        <ImageView
+            android:id="@+id/ivEditList"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_edit_premium"
+            android:padding="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/text_75"
+            android:tooltipText="@string/text_auto_192"
+            android:visibility="visible" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

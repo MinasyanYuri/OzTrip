@@ -1,0 +1,599 @@
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\TravelList.java ---
+
+package com.example.oztrip;
+
+import androidx.room.Entity;
+import androidx.room.Ignore;
+import androidx.room.PrimaryKey;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.maplibre.android.geometry.LatLng; // Проверь этот импорт для точек
+
+public class TravelList {
+    public String name;
+    public ArrayList<SavedLocation> locations = new ArrayList<>();
+    // ДОБАВЬ ЭТО: теперь у каждого листа своя линия
+    public ArrayList<org.maplibre.android.geometry.LatLng> pathPoints = new ArrayList<>();
+
+    public TravelList(String name) { this.name = name; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", name);
+
+        // Сохраняем locations как список мапов
+        List<Map<String, Object>> locMaps = new ArrayList<>();
+        for (SavedLocation loc : locations) {
+            locMaps.add(loc.toMap());
+        }
+        map.put("locations", locMaps);
+
+        // Сохраняем pathPoints как список объектов с lat/lng
+        List<Map<String, Double>> points = new ArrayList<>();
+        for (LatLng p : pathPoints) {
+            Map<String, Double> point = new HashMap<>();
+            point.put("lat", p.getLatitude());
+            point.put("lng", p.getLongitude());
+            points.add(point);
+        }
+        map.put("pathPoints", points);
+        return map;
+    }
+
+    public static TravelList fromMap(String id, Map<String, Object> map) {
+        String name = (String) map.get("name");
+        TravelList list = new TravelList(name);
+
+        // Восстанавливаем locations
+        List<Map<String, Object>> locMaps = (List<Map<String, Object>>) map.get("locations");
+        if (locMaps != null) {
+            for (Map<String, Object> locMap : locMaps) {
+                list.locations.add(SavedLocation.fromMap(locMap, null));
+            }
+        }
+
+        // Восстанавливаем pathPoints
+        List<Map<String, Double>> points = (List<Map<String, Double>>) map.get("pathPoints");
+        if (points != null) {
+            for (Map<String, Double> point : points) {
+                list.pathPoints.add(new LatLng(point.get("lat"), point.get("lng")));
+            }
+        }
+        return list;
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\TravelListAdapter.java ---
+
+package com.example.oztrip;
+
+import android.annotation.SuppressLint;
+import android.graphics.Color;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.CheckBox;
+import android.widget.ImageView;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+import com.google.android.material.card.MaterialCardView;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+public class TravelListAdapter extends RecyclerView.Adapter<TravelListAdapter.ViewHolder> {
+    private List<TravelList> lists;
+    private OnListClickListener listener;
+    private int selectedIndex = 0;
+    private boolean isSheetMode;
+
+    // Поля для режима выбора (только для sheet)
+    private boolean selectionMode = false;
+    private Set<Integer> selectedPositions = new HashSet<>();
+    private OnSelectionChangeListener selectionListener;
+
+    public interface OnListClickListener {
+        void onListClick(int position);
+        void onListRename(int position, String oldName);
+    }
+
+    public interface OnSelectionChangeListener {
+        void onSelectionChanged(int selectedCount);
+    }
+
+    public TravelListAdapter(List<TravelList> lists, OnListClickListener listener) {
+        this(lists, listener, false);
+    }
+
+    public TravelListAdapter(List<TravelList> lists, OnListClickListener listener, boolean isSheetMode) {
+        this.lists = lists;
+        this.listener = listener;
+        this.isSheetMode = isSheetMode;
+    }
+
+    public void setSelectionChangeListener(OnSelectionChangeListener listener) {
+        this.selectionListener = listener;
+    }
+
+    public boolean isSelectionMode() { return selectionMode; }
+
+    public void setSelectionMode(boolean enabled) {
+        if (selectionMode == enabled) return;
+        selectionMode = enabled;
+        selectedPositions.clear();
+        notifyDataSetChanged();
+        if (selectionListener != null) selectionListener.onSelectionChanged(0);
+        if (modeChangeListener != null) modeChangeListener.onSelectionModeChanged(enabled);
+    }
+
+    public Set<Integer> getSelectedPositions() { return selectedPositions; }
+
+    public void toggleSelection(int position) {
+        if (selectedPositions.contains(position)) {
+            selectedPositions.remove(position);
+        } else {
+            selectedPositions.add(position);
+        }
+        notifyItemChanged(position);
+        if (selectionListener != null) selectionListener.onSelectionChanged(selectedPositions.size());
+    }
+
+    public void clearSelection() {
+        selectedPositions.clear();
+        notifyDataSetChanged();
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        int layoutId = isSheetMode ? R.layout.item_travel_list_sheet : R.layout.item_travel_list;
+        View v = LayoutInflater.from(parent.getContext()).inflate(layoutId, parent, false);
+        return new ViewHolder(v);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, @SuppressLint("RecyclerView") int position) {
+        TravelList list = lists.get(position);
+        holder.text.setText(list.name);
+
+        if (isSheetMode) {
+            if (selectionMode) {
+                if (holder.checkBox != null) {
+                    holder.checkBox.setVisibility(View.VISIBLE);
+                    holder.checkBox.setChecked(selectedPositions.contains(position));
+                }
+                if (holder.editIcon != null) holder.editIcon.setVisibility(View.GONE);
+                holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item);
+                holder.text.setTextColor(Color.WHITE);  // Белый текст
+            } else {
+                if (holder.checkBox != null) holder.checkBox.setVisibility(View.GONE);
+                if (position == selectedIndex) {
+                    holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item_active);
+                    holder.text.setTextColor(Color.WHITE);
+                    if (holder.editIcon != null) {
+                        holder.editIcon.setVisibility(View.VISIBLE);
+                        holder.editIcon.setColorFilter(Color.WHITE);
+                    }
+                } else {
+                    holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item);
+                    holder.text.setTextColor(Color.parseColor("#B0B0B0")); // Серый текст
+                    if (holder.editIcon != null) holder.editIcon.setVisibility(View.GONE);
+                }
+            }
+        } else {
+        MaterialCardView card = (MaterialCardView) holder.itemView;
+        if (holder.checkBox != null) holder.checkBox.setVisibility(View.GONE);
+
+        holder.editIcon.setVisibility(View.VISIBLE);   // иконка всегда занимает место
+
+        if (position == selectedIndex) {
+            card.setCardBackgroundColor(Color.parseColor("#FF9800"));
+            card.setStrokeColor(Color.WHITE);
+            card.setStrokeWidth(dpToPx(2, holder.itemView));
+            holder.text.setTextColor(Color.WHITE);
+            holder.text.setAlpha(1.0f);
+            holder.editIcon.setAlpha(1.0f);
+            holder.editIcon.setColorFilter(Color.WHITE);
+            holder.editIcon.setClickable(true);
+        } else {
+            card.setCardBackgroundColor(Color.parseColor("#CCFFFFFF"));
+            card.setStrokeColor(Color.WHITE);
+            card.setStrokeWidth(dpToPx(1, holder.itemView));
+            holder.text.setTextColor(Color.parseColor("#B0B0B0"));
+            holder.text.setAlpha(0.9f);
+            holder.editIcon.setAlpha(0f);              // невидима, но место занято
+            holder.editIcon.setColorFilter(null);
+            holder.editIcon.setClickable(false);
+        }
+
+    }
+
+        // Общие обработчики кликов
+        holder.itemView.setOnClickListener(v -> {
+            if (isSheetMode && selectionMode) {
+                toggleSelection(position);
+            } else {
+                if (selectedIndex != position) {
+                    int old = selectedIndex;
+                    selectedIndex = position;
+                    notifyItemChanged(old);
+                    notifyItemChanged(selectedIndex);
+                    listener.onListClick(position);
+                    v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                }
+            }
+        });
+
+        holder.itemView.setOnLongClickListener(v -> {
+            if (isSheetMode && !selectionMode) {
+                setSelectionMode(true);
+                toggleSelection(position);
+                return true;
+            }
+            if (!isSheetMode) {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                listener.onListRename(position, list.name);
+                return true;
+            }
+            return false;
+        });
+
+        if (holder.editIcon != null) {
+            holder.editIcon.setOnClickListener(v -> {
+                if (!selectionMode) {
+                    if (position != selectedIndex) {
+                        // Поездка неактивна → просто активируем её
+                        int old = selectedIndex;
+                        selectedIndex = position;
+                        notifyItemChanged(old);
+                        notifyItemChanged(selectedIndex);
+                        listener.onListClick(position);
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                    } else {
+                        // Поездка уже активна → открываем переименование
+                        listener.onListRename(position, list.name);
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                    }
+                }
+            });
+        }
+        if (holder.checkBox != null) {
+            holder.checkBox.setOnCheckedChangeListener(null);
+            holder.checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (isChecked && !selectedPositions.contains(position)) {
+                    selectedPositions.add(position);
+                } else if (!isChecked) {
+                    selectedPositions.remove(position);
+                }
+                if (selectionListener != null)
+                    selectionListener.onSelectionChanged(selectedPositions.size());
+            });
+        }
+    }
+
+    private int dpToPx(int dp, View v) {
+        return (int) (dp * v.getContext().getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    public int getItemCount() {
+        return lists.size();
+    }
+
+    public void setSelectedIndex(int index) {
+        int prev = this.selectedIndex;
+        this.selectedIndex = index;
+        if (prev >= 0 && prev < lists.size()) notifyItemChanged(prev);
+        if (index >= 0 && index < lists.size()) notifyItemChanged(index);
+    }
+
+    static class ViewHolder extends RecyclerView.ViewHolder {
+        TextView text;
+        ImageView editIcon;
+        CheckBox checkBox;
+
+        ViewHolder(View v) {
+            super(v);
+            text = v.findViewById(R.id.tvListName);
+            editIcon = v.findViewById(R.id.ivEditList);
+            checkBox = v.findViewById(R.id.checkboxSelect);
+        }
+    }
+    public interface OnSelectionModeChangeListener {
+        void onSelectionModeChanged(boolean enabled);
+    }
+    private OnSelectionModeChangeListener modeChangeListener;
+
+    public void setOnSelectionModeChangeListener(OnSelectionModeChangeListener listener) {
+        this.modeChangeListener = listener;
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\TravelListSheetFragment.java ---
+
+package com.example.oztrip;
+
+import android.app.Dialog;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
+public class TravelListSheetFragment extends BottomSheetDialogFragment {
+
+    private RecyclerView recyclerView;
+    private EditText etSearch;
+    private LinearLayout headerLayout, selectionToolbar;
+    private TextView tvSelectedCount;
+    private View btnSelect, btnCancelSelection, btnDeleteSelected;
+    private TravelListAdapter adapter;
+    private List<TravelList> allLists;
+    private int activeIndex;
+    private List<Integer> indexMap = new ArrayList<>();
+
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
+        return new BottomSheetDialog(requireContext(), R.style.TransparentBottomSheet);
+    }
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.bottom_sheet_travel_lists, container, false);
+
+        recyclerView = view.findViewById(R.id.rvSheetTravelLists);
+        etSearch = view.findViewById(R.id.etSearchList);
+        headerLayout = view.findViewById(R.id.headerLayout);
+        selectionToolbar = view.findViewById(R.id.selectionToolbar);
+        tvSelectedCount = view.findViewById(R.id.tvSelectedCount);
+        btnSelect = view.findViewById(R.id.btnSelect);
+        btnCancelSelection = view.findViewById(R.id.btnCancelSelection);
+        btnDeleteSelected = view.findViewById(R.id.btnDeleteSelected);
+
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity != null) {
+            allLists = new ArrayList<>(activity.getAllTravelLists());
+            activeIndex = activity.getActiveListIndex();
+        } else {
+            allLists = new ArrayList<>();
+            activeIndex = 0;
+        }
+
+        filterLists("");
+
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterLists(s.toString());
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+
+        btnSelect.setOnClickListener(v -> {
+            adapter.setSelectionMode(true);
+            headerLayout.setVisibility(View.GONE);
+            selectionToolbar.setVisibility(View.VISIBLE);
+            tvSelectedCount.setText(getString(R.string.text_auto_181));
+            btnDeleteSelected.setEnabled(false);
+        });
+
+        btnCancelSelection.setOnClickListener(v -> {
+            adapter.setSelectionMode(false);
+            headerLayout.setVisibility(View.VISIBLE);
+            selectionToolbar.setVisibility(View.GONE);
+        });
+
+        btnDeleteSelected.setOnClickListener(v -> {
+            if (adapter == null) return;
+            Set<Integer> selected = adapter.getSelectedPositions();
+            if (selected.isEmpty()) return;
+
+            View dialogView = inflater.inflate(R.layout.dialog_confirm_delete, null);
+            TextView tvMessage = dialogView.findViewById(R.id.tvConfirmMessage);
+            tvMessage.setText(getString(R.string.text_auto_182) + selected.size() + getString(R.string.text_auto_183));
+
+            AlertDialog confirmDialog = new AlertDialog.Builder(getActivity(), R.style.PremiumDialogTheme)
+                    .setView(dialogView)
+                    .create();
+
+            dialogView.findViewById(R.id.btnConfirmDelete).setOnClickListener(btn -> {
+                List<Integer> realIndices = new ArrayList<>();
+                for (Integer pos : selected) {
+                    realIndices.add(indexMap.get(pos));
+                }
+                Collections.sort(realIndices, Collections.reverseOrder());
+                for (int idx : realIndices) {
+                    ((MainActivity) getActivity()).removeTravelListByIndex(idx);
+                }
+
+                Toast.makeText(getActivity(), getString(R.string.text_auto_184) + realIndices.size() + getString(R.string.text_auto_185), Toast.LENGTH_SHORT).show();
+
+                // Закрываем диалог
+                confirmDialog.dismiss();
+
+                // Обновляем данные
+                allLists = new ArrayList<>(((MainActivity) getActivity()).getAllTravelLists());
+                activeIndex = ((MainActivity) getActivity()).getActiveListIndex();
+                filterLists(etSearch.getText().toString());
+
+                // Сбрасываем режим выбора и показываем заголовок
+                adapter.setSelectionMode(false);
+                headerLayout.setVisibility(View.VISIBLE);
+                selectionToolbar.setVisibility(View.GONE);
+            });
+
+            dialogView.findViewById(R.id.btnConfirmCancel).setOnClickListener(btn -> confirmDialog.dismiss());
+            confirmDialog.show();
+        });
+
+        return view;
+    }
+
+    private void filterLists(String query) {
+        if (allLists == null) return;
+        List<TravelList> filtered = new ArrayList<>();
+        indexMap.clear();
+        for (int i = 0; i < allLists.size(); i++) {
+            if (allLists.get(i).name.toLowerCase().contains(query.toLowerCase())) {
+                filtered.add(allLists.get(i));
+                indexMap.add(i);
+            }
+        }
+
+        adapter = new TravelListAdapter(filtered, new TravelListAdapter.OnListClickListener() {
+            @Override
+            public void onListClick(int position) {
+                if (adapter.isSelectionMode()) {
+                    adapter.toggleSelection(position);
+                    return;
+                }
+                int realIndex = indexMap.get(position);
+                MainActivity act = (MainActivity) getActivity();
+                if (act != null) act.switchTravelList(realIndex);
+                dismiss();
+            }
+
+            @Override
+            public void onListRename(int position, String oldName) {
+                int realIndex = indexMap.get(position);
+                MainActivity act = (MainActivity) getActivity();
+                if (act != null) {
+                    act.showRenameDialog(realIndex, oldName, () -> {
+                        filterLists(etSearch.getText().toString());
+                    });
+                }
+            }
+        }, true);
+        adapter.setOnSelectionModeChangeListener(enabled -> {
+            if (enabled) {
+                // Включаем режим выбора – скрываем заголовок, показываем панель
+                headerLayout.setVisibility(View.GONE);
+                selectionToolbar.setVisibility(View.VISIBLE);
+                tvSelectedCount.setText(getString(R.string.text_auto_181));
+                btnDeleteSelected.setEnabled(false);
+            } else {
+                // Выключаем режим – возвращаем заголовок, скрываем панель
+                headerLayout.setVisibility(View.VISIBLE);
+                selectionToolbar.setVisibility(View.GONE);
+            }
+        });
+        adapter.setSelectionChangeListener(count -> {
+            tvSelectedCount.setText(count + getString(R.string.text_auto_186));
+            btnDeleteSelected.setEnabled(count > 0);
+        });
+
+        int activePos = indexMap.indexOf(activeIndex);
+        adapter.setSelectedIndex(activePos);
+
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerView.setAdapter(adapter);
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\TravelRepository.java ---
+
+package com.example.oztrip;
+
+import android.util.Log;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.*;
+import java.util.*;
+
+public class TravelRepository {
+    private final FirebaseFirestore db;
+
+    public TravelRepository() {
+        db = FirebaseFirestore.getInstance();
+    }
+
+    private String getUserId() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return null;
+        return FirebaseAuth.getInstance().getCurrentUser().getUid();
+    }
+
+    public void loadAllLists(OnDataLoadedListener listener) {
+        String userId = getUserId();
+        if (userId == null) {
+            if (listener != null) listener.onError("Not signed in");
+            return;
+        }
+        db.collection("travel_lists")
+                .whereEqualTo("userId", userId)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<TravelList> lists = new ArrayList<>();
+                    for (DocumentSnapshot doc : queryDocumentSnapshots) {
+                        TravelList list = TravelList.fromMap(doc.getId(), doc.getData());
+                        if (list != null) lists.add(list);
+                    }
+                    listener.onLoaded(lists);
+                })
+                .addOnFailureListener(e -> listener.onError(e.getMessage()));
+    }
+
+    public void saveAllLists(List<TravelList> lists, OnSaveListener listener) {
+        String userId = getUserId();
+        if (userId == null) {
+            if (listener != null) listener.onError("Not signed in");
+            return;
+        }
+        db.collection("travel_lists")
+                .whereEqualTo("userId", userId)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                        doc.getReference().delete();
+                    }
+                    for (TravelList list : lists) {
+                        Map<String, Object> data = list.toMap();
+                        data.put("userId", userId);
+                        db.collection("travel_lists").add(data);
+                    }
+                    if (listener != null) listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    if (listener != null) listener.onError(e.getMessage());
+                });
+    }
+
+    public interface OnDataLoadedListener {
+        void onLoaded(List<TravelList> lists);
+        void onError(String error);
+    }
+
+    public interface OnSaveListener {
+        void onSuccess();
+        void onError(String error);
+    }
+}

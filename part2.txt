@@ -1,0 +1,4214 @@
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\LoginActivity.java ---
+
+package com.example.oztrip;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.button.MaterialButton;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
+
+public class LoginActivity extends BaseActivity  {
+
+    private FirebaseAuth mAuth;
+    private EditText etEmail, etPassword;
+    private TextView tvError;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_login);
+
+        MaterialButton btnGuest = findViewById(R.id.btnGuestLogin);
+        btnGuest.setOnClickListener(v -> enterGuestMode());
+        mAuth = FirebaseAuth.getInstance();
+        etEmail = findViewById(R.id.etEmailLogin);
+        etPassword = findViewById(R.id.etPasswordLogin);
+        tvError = findViewById(R.id.tvErrorLogin);
+        MaterialButton btnLogin = findViewById(R.id.btnLogin);
+        TextView tvRegisterLink = findViewById(R.id.tvRegisterLink);
+        ImageButton btnToggle = findViewById(R.id.btnTogglePassword);
+        final boolean[] isPasswordVisible = {false};
+
+        btnToggle.setOnClickListener(v -> {
+            if (isPasswordVisible[0]) {
+                // Скрываем пароль
+                etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                btnToggle.setImageResource(R.drawable.ic_eye_off); // Иконка закрытого глаза
+            } else {
+                // Показываем пароль
+                etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+                btnToggle.setImageResource(R.drawable.ic_eye); // Иконка открытого глаза
+            }
+            isPasswordVisible[0] = !isPasswordVisible[0];
+
+            // Переносим курсор в конец текста, чтобы он не прыгал в начало
+            etPassword.setSelection(etPassword.getText().length());
+        });
+        btnLogin.setOnClickListener(v -> {
+            String input = etEmail.getText().toString().trim(); // Это может быть почта или ник
+            String password = etPassword.getText().toString().trim();
+
+            if (input.isEmpty() || password.isEmpty()) {
+                showError(getString(R.string.text_auto_86));
+                return;
+            }
+
+            // Если в строке есть '@', значит это почта — входим сразу
+            if (input.contains("@")) {
+                loginWithEmail(input, password);
+            } else {
+                // Если '@' нет, значит это никнейм — ищем Email в Firestore
+                findEmailByUsername(input, password);
+            }
+        });
+
+        tvRegisterLink.setOnClickListener(v -> {
+            startActivity(new Intent(LoginActivity.this, RegisterActivity.class));
+            finish();
+        });
+    }
+
+    private void enterGuestMode() {
+        getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                .edit()
+                .putBoolean("guest_mode", true)
+                .remove("guest_travels")
+                .apply();
+
+        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
+    private void findEmailByUsername(String username, String password) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+
+        db.collection("users")
+                .whereEqualTo("username", username)
+                .get()
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful() && task.getResult() != null) {
+                        if (!task.getResult().isEmpty()) {
+                            // НИК НАЙДЕН
+                            String email = task.getResult().getDocuments().get(0).getString("email");
+                            android.util.Log.d("OZTRIP_DEBUG", getString(R.string.text_auto_87) + email);
+
+                            if (email != null && !email.isEmpty()) {
+                                loginWithEmail(email, password);
+                            } else {
+                                showError(getString(R.string.text_auto_88));
+                            }
+                        } else {
+                            // НИК НЕ НАЙДЕН - давай выведем в лог, что именно мы искали
+                            android.util.Log.e("OZTRIP_DEBUG", getString(R.string.text_auto_89) + username + getString(R.string.text_auto_90));
+                            showError(getString(R.string.text_auto_89) + username + getString(R.string.text_auto_91));
+                        }
+                    } else {
+                        showError(getString(R.string.text_auto_92) + task.getException().getMessage());
+                    }
+                });
+    }
+    private void loginWithEmail(String email, String password) {
+        // Показываем лоадинг (если есть ProgressBar)
+        // pbLoading.setVisibility(View.VISIBLE);
+
+        mAuth.signInWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this, task -> {
+                    // pbLoading.setVisibility(View.GONE);
+
+                    if (task.isSuccessful()) {
+                        // ОТПРАВЛЯЕМ ПИСЬМО О ВХОДЕ
+                        MailHelper.sendSecurityAlert(this, email, "login");
+                        getSharedPreferences("OzTripPrefs", MODE_PRIVATE).edit()
+                                .putBoolean("registration_complete", true)
+                                .apply();
+                        startActivity(new Intent(LoginActivity.this, MainActivity.class));
+                        finish();
+                    } else {
+                        // НИК ВЕРНЫЙ, НО ПАРОЛЬ ОШИБОЧНЫЙ (или другая ошибка)
+                        showError(getString(R.string.text_auto_93));
+
+                        // Чтобы было совсем getString(R.string.text_auto_94), можно подсветить поле пароля красным
+                        etPassword.setError(getString(R.string.text_auto_95));
+                    }
+                });
+    }
+
+    private void showError(String text) {
+        tvError.setText(text);
+        tvError.setVisibility(View.VISIBLE);
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\MailHelper.java ---
+
+package com.example.oztrip;
+
+import android.content.Context;
+import android.os.AsyncTask;
+import java.util.Properties;
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.PasswordAuthentication;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
+
+public class MailHelper {
+
+    private static final String SENDER_EMAIL = "minasyanyuri910@gmail.com";
+    private static final String SENDER_PASSWORD = "qogchhoxqmecmlcg";
+
+    public static void sendSecurityAlert(Context context, String userEmail, String type) {
+        new AsyncTask<Void, Void, Void>() {
+            @Override
+            protected Void doInBackground(Void... voids) {
+                Properties props = new Properties();
+                props.put("mail.smtp.auth", "true");
+                props.put("mail.smtp.starttls.enable", "true");
+                props.put("mail.smtp.host", "smtp.gmail.com");
+                props.put("mail.smtp.port", "587");
+
+                Session session = Session.getInstance(props, new javax.mail.Authenticator() {
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return new PasswordAuthentication(SENDER_EMAIL, SENDER_PASSWORD);
+                    }
+                });
+
+                try {
+                    Message message = new MimeMessage(session);
+                    message.setFrom(new InternetAddress(SENDER_EMAIL));
+                    message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(userEmail));
+
+                    String subject = context.getString(R.string.text_auto_96) + (type.equals("login") ? context.getString(R.string.text_auto_97) : context.getString(R.string.text_auto_98));
+                    String currentTime = new java.text.SimpleDateFormat("HH:mm:ss, dd.MM.yyyy",
+                            java.util.Locale.getDefault()).format(new java.util.Date());
+
+                    String body = context.getString(R.string.text_auto_99) + currentTime + ".\n" +
+                            context.getString(R.string.text_auto_100);
+
+                    message.setSubject(subject);
+                    message.setText(body);
+                    Transport.send(message);
+                    android.util.Log.d("OZTRIP_MAIL", context.getString(R.string.text_auto_101) + userEmail);
+                } catch (MessagingException e) {
+                    android.util.Log.e("OZTRIP_MAIL", context.getString(R.string.text_auto_102) + e.getMessage());
+                    e.printStackTrace();
+                }
+                return null;
+            }
+        }.execute();
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\MainActivity.java ---
+
+package com.example.oztrip;
+
+import android.content.Intent;
+
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.SpannedString;
+import android.text.TextWatcher;
+import android.text.style.AbsoluteSizeSpan;
+import android.util.Log;
+import android.view.HapticFeedbackConstants;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.TooltipCompat;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import org.maplibre.android.style.layers.Layer;
+import org.maplibre.android.style.layers.Property;
+import org.maplibre.android.style.layers.PropertyFactory;
+import org.maplibre.geojson.Feature;
+import org.maplibre.geojson.Point;
+import org.maplibre.android.geometry.LatLng;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.maplibre.android.MapLibre;
+import org.maplibre.android.camera.CameraPosition;
+import org.maplibre.android.camera.CameraUpdateFactory;
+
+import com.google.android.material.slider.Slider;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.gson.GsonBuilder;
+import org.maplibre.android.location.LocationComponent;
+import org.maplibre.android.location.LocationComponentActivationOptions;
+import org.maplibre.android.maps.MapLibreMap;
+import org.maplibre.android.maps.MapView;
+import org.maplibre.android.maps.Style;
+import com.bumptech.glide.Glide;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
+import java.util.Locale;
+
+import android.content.SharedPreferences;
+import android.content.Context;
+
+public class MainActivity extends BaseActivity  {
+    private ProgressBar pbGlobalLoading;
+    private boolean isMapReady = false;
+
+    private boolean isFirstResume = true;
+    private LiquidSegmentedControl liquidNav;
+    private View infoCard;
+    private String currentLanguage;
+    private View mapContainer, btnSaveLocation, topPanel, centerMarker, sideButtons;
+    private FrameLayout mapContentContainer, aiContainer;
+    private TravelRepository travelRepository;
+    private boolean isDataLoaded = false; // флаг, чтобы не дублировать загрузку
+    private ArrayList<TravelList> allTravelLists = new ArrayList<>(); // Список всех веток
+    private int currentActiveIndex = 0; // Номер ветки, на которой мы сейчас
+    private java.util.List<org.maplibre.android.geometry.LatLng> pathPoints = new java.util.ArrayList<>();
+    private LatLng homeLatLng = new LatLng(40.1792, 44.5134); // Та самая база
+    private MapView mapView;
+    public MapLibreMap mapLibre;
+    // Список всех сохраненных точек (баз)
+// Удаляем: private java.util.List<Feature> savedFeatures = new java.util.ArrayList<>();
+    private SavedLocation currentlyEditingLocation;
+    // Добавляем: Список уникальных getString(R.string.text_auto_103) с уровнями
+    private java.util.List<SavedLocation> uniqueLocations = new java.util.ArrayList<>();
+    private static final String SAVED_POINTS_SOURCE = "saved-points-source";
+    private static final String SAVED_POINTS_LAYER = "saved-points-layer";
+    private com.google.android.material.bottomsheet.BottomSheetBehavior sheetBehavior;
+    private org.maplibre.android.annotations.Polyline runningLine;
+    private boolean isSearching = false;
+    // В MainActivity:
+    private TravelListAdapter listAdapter;
+    private RecyclerView rvTravelLists;
+    private List<TravelList> allLists = new ArrayList<>();
+
+    private TravelList currentActiveList;
+
+    private org.maplibre.android.annotations.Icon createPremiumMarker(SavedLocation loc) {
+        // 0. Если иконка уже была создана ранее — берем из кэша (Экономим ресурсы!)
+        if (loc.cachedIcon != null) return loc.cachedIcon;
+
+        int canvasSize = (int) dpToPx(74); // Чуть увеличим под тени
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(canvasSize, canvasSize, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+
+        float center = canvasSize / 2f;
+        float mainCircleRadius = dpToPx(20);
+        float arcRadius = mainCircleRadius + dpToPx(4);
+        float strokeWidth = (float) dpToPx(2.5f);
+
+        // --- ПРИГОТОВЛЕНИЕ КРАСОК ---
+
+        // Глубокая тень для парения
+        android.graphics.Paint shadowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        shadowPaint.setColor(Color.WHITE);
+        shadowPaint.setShadowLayer(dpToPx(12), 0, dpToPx(5), Color.parseColor("#44000000"));
+
+        // Оранжевый неон
+        android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setColor(Color.parseColor("#FF9800"));
+        strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(strokeWidth);
+        strokePaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+
+        // Белая обводка вокруг самого фото (чтобы отделить его от оранжевого кольца)
+        android.graphics.Paint whiteBorderPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        whiteBorderPaint.setColor(Color.WHITE);
+        whiteBorderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+        whiteBorderPaint.setStrokeWidth(dpToPx(2));
+
+        // --- ЛОГИКА ЗАГРУЗКИ ФОТО ---
+        android.graphics.Paint photoPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        boolean hasPhoto = !loc.photoPaths.isEmpty();
+
+        if (hasPhoto) {
+            try {
+                String path = loc.photoPaths.get(loc.photoPaths.size() - 1);
+                File file = new File(path);
+                if (file.exists()) {
+                    Bitmap source = BitmapFactory.decodeFile(path);
+                    if (source != null) {
+
+                    // 1. Делаем фото квадратным (Center Crop)
+                    int size = Math.min(source.getWidth(), source.getHeight());
+                    int x = (source.getWidth() - size) / 2;
+                    int y = (source.getHeight() - size) / 2;
+                    android.graphics.Bitmap squared = android.graphics.Bitmap.createBitmap(source, x, y, size, size);
+
+                    // 2. Масштабируем под размер нашего маркера
+                    int targetDim = (int) (mainCircleRadius * 2);
+                    android.graphics.Bitmap scaled = android.graphics.Bitmap.createScaledBitmap(squared, targetDim, targetDim, true);
+
+                    // 3. Создаем шейдер для круглой отрисовки
+                    android.graphics.BitmapShader shader = new android.graphics.BitmapShader(scaled, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP);
+                    photoPaint.setShader(shader);
+                }
+                    else {
+                        hasPhoto = false;
+                    }
+                } else {
+                    hasPhoto = false;
+                }
+            } catch (Exception e) {
+                hasPhoto = false;
+            }
+        }
+
+        // --- РИСОВАНИЕ ---
+
+        canvas.drawCircle(center, center, mainCircleRadius, shadowPaint);
+
+// 2. РИСУЕМ ФОТО (Или белое ядро)
+        if (hasPhoto) {
+            canvas.save();
+            canvas.translate(center - mainCircleRadius, center - mainCircleRadius);
+            canvas.drawCircle(mainCircleRadius, mainCircleRadius, mainCircleRadius, photoPaint);
+            canvas.restore();
+            // Белая кайма поверх фото, чтобы оно выглядело аккуратно
+            canvas.drawCircle(center, center, mainCircleRadius, whiteBorderPaint);
+        } else {
+            android.graphics.Paint innerPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            innerPaint.setColor(Color.WHITE);
+            canvas.drawCircle(center, center, mainCircleRadius, innerPaint);
+        }
+
+// 3. ТЕПЕРЬ РИСУЕМ ШЛЯПУ (PROGRESS ARC & BADGE)
+// Важно: это должно быть ПОСЛЕ отрисовки фото, чтобы быть сверху!
+
+        android.graphics.RectF arcRect = new android.graphics.RectF(
+                center - arcRadius, center - arcRadius,
+                center + arcRadius, center + arcRadius
+        );
+
+        if (loc.level <= 1) {
+            // Уровень 1: Просто полное кольцо вокруг
+            canvas.drawCircle(center, center, arcRadius, strokePaint);
+        } else {
+            // Уровень 2+: Разрывное кольцо и Badge с цифрой
+            canvas.drawArc(arcRect, -70, 320, false, strokePaint);
+
+            // Рисуем оранжевый Badge (кружок для цифры)
+            android.graphics.Paint badgePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            badgePaint.setColor(Color.parseColor("#FF9800"));
+            float badgeRadius = dpToPx(9);
+            float badgeY = center - arcRadius; // Позиция строго сверху
+
+            // Рисуем сам кружок badge
+            canvas.drawCircle(center, badgeY, badgeRadius, badgePaint);
+
+            // Рисуем число уровня внутри badge
+            android.graphics.Paint textPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            textPaint.setColor(Color.WHITE);
+            textPaint.setTextSize(dpToPx(11));
+            textPaint.setTypeface(android.graphics.Typeface.create("sans-serif-black", android.graphics.Typeface.NORMAL));
+            textPaint.setTextAlign(android.graphics.Paint.Align.CENTER);
+
+            float textY = badgeY - ((textPaint.descent() + textPaint.ascent()) / 2f);
+            canvas.drawText(String.valueOf(loc.level), center, textY, textPaint);
+        }
+
+        // --- СОХРАНЕНИЕ В КЭШ ---
+        loc.cachedIcon = org.maplibre.android.annotations.IconFactory.getInstance(this).fromBitmap(bitmap);
+        return loc.cachedIcon;
+    }
+    private void checkPermissions() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1002);
+            }
+        }
+    }
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // Создаем менеджер для текущего вида карты
+
+        allLists = new ArrayList<>();
+        uniqueLocations = new ArrayList<>();
+        pathPoints = new ArrayList<>();
+
+        // 2. ПОТОМ Загружаем данные из памяти
+        loadAllData();
+
+
+        if (allLists.isEmpty()) {
+            TravelList defaultList = new TravelList(getString(R.string.text_auto_104));
+
+            allLists.add(defaultList);
+            currentActiveList = defaultList;
+        }
+        try {
+            MapLibre.getInstance(this);
+            // Принудительно применяем сохранённый язык
+            // 1. Применяем язык ДО всего
+            SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+            String lang = prefs.getString("language", "ru");
+            setLocale(lang);
+            currentLanguage = lang;
+
+            setContentView(R.layout.activity_main);
+// Собираем все View, которые должны быть видны только на вкладке Карта
+            // ======== Инициализация View и BottomSheet =========
+
+
+
+            // ======== Добавляем AiFragment =========
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.aiContainer, new AiFragment())
+                    .commit();
+
+// Группы View, которые относятся к карте
+            mapContainer = findViewById(R.id.mapContainer);
+            btnSaveLocation = findViewById(R.id.btnSaveLocation);
+            topPanel = findViewById(R.id.topPanel);
+            centerMarker = findViewById(R.id.centerMarker);
+            sideButtons = findViewById(R.id.sideButtons);
+            infoCard = findViewById(R.id.infoCard);
+            mapContentContainer = findViewById(R.id.mapContentContainer);
+            aiContainer = findViewById(R.id.aiContainer);
+// остальные findViewById…
+
+
+
+            sheetBehavior = BottomSheetBehavior.from(infoCard);
+            sheetBehavior.setHideable(true);
+            sheetBehavior.setPeekHeight(450);                  // ставь здесь
+            sheetBehavior.setHalfExpandedRatio(0.4f);
+            sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+            setupBottomSheetCallbacks(); // <-- один раз здесь
+// Переключение вкладок
+            liquidNav = findViewById(R.id.liquid_nav);
+            boolean isDark = (getResources().getConfiguration().uiMode
+                    & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+            liquidNav.setDarkMode(isDark);
+            if (liquidNav != null) {
+                liquidNav.setOnTabSelectedListener(index -> {
+                    if (mapView != null) {
+                        mapView.onResume();  // возобновить рендеринг
+                    }
+                    float screenWidth = getResources().getDisplayMetrics().widthPixels;
+                    if (index == 0) {
+                        // === КАРТА ===
+                        // AI-контейнер уезжает вправо
+                        aiContainer.animate()
+                                .translationX(screenWidth)
+                                .alpha(0f)
+                                .setDuration(400)
+                                .withEndAction(() -> {
+                                    aiContainer.setVisibility(View.GONE);
+                                    aiContainer.setTranslationX(0f);
+                                });
+
+                        // Контейнер карты выезжает слева
+                        mapContentContainer.setVisibility(View.VISIBLE);
+                        mapContentContainer.setTranslationX(-screenWidth);
+                        mapContentContainer.animate()
+                                .translationX(0f)
+                                .alpha(1f)
+                                .setDuration(400)
+                                .start();
+
+                        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                        if (mapLibre != null) mapLibre.getUiSettings().setAllGesturesEnabled(true);
+
+                    } else {
+                        // === ИИ ===
+                        if (mapView != null) {
+                            mapView.onPause();   // приостановить рендеринг
+                        }
+                        // Контейнер карты уезжает влево
+                        mapContentContainer.animate()
+                                .translationX(-screenWidth)
+                                .alpha(0f)
+                                .setDuration(400)
+                                .withEndAction(() -> {
+                                    mapContentContainer.setVisibility(View.INVISIBLE);
+                                    mapContentContainer.setTranslationX(0f); // сброс
+                                });
+
+                        // AI-контейнер появляется справа
+                        aiContainer.setVisibility(View.VISIBLE);
+                        aiContainer.setTranslationX(screenWidth);
+                        aiContainer.setAlpha(0f);
+                        aiContainer.animate()
+                                .translationX(0f)
+                                .alpha(1f)
+                                .setDuration(400)
+                                .start();
+
+                        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+
+                    }
+                });
+            }
+
+
+
+// Если активность восстанавливается после поворота – не добавляем фрагменты заново
+
+            setupRecyclerView();
+            rvTravelLists.setFadingEdgeLength((int) dpToPx(40));
+            rvTravelLists.setHorizontalFadingEdgeEnabled(true);
+            // И не забудь обновить адаптер, если он уже создан
+            if (listAdapter != null) listAdapter.notifyDataSetChanged();
+            // Находим кнопку настроек (шестеренку), которую мы добавили в topBar
+            findViewById(R.id.btnSettings).setOnClickListener(v -> {
+                Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+                startActivity(intent);
+                // Добавим красивую анимацию перехода, если хочешь
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+            });
+            mapView = findViewById(R.id.mapView);
+            if (mapView != null) mapView.onCreate(savedInstanceState);
+
+
+
+
+
+            // Проверяем, залогинен ли пользователь
+            FirebaseAuth auth = FirebaseAuth.getInstance();
+            boolean isGuest = getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                    .getBoolean("guest_mode", false);
+
+            if (auth.getCurrentUser() == null && !isGuest) {
+                startActivity(new Intent(this, LoginActivity.class));
+                finish();
+                return;
+            }
+            if (auth.getCurrentUser() != null) {
+                travelRepository = new TravelRepository();
+            }
+            loadTravelDataFromCloud();   // внутри уже есть проверка на пользователя
+            setupButtons();
+// Вставьте в самый конец onCreate, после setupButtons()
+            if (isFirstLaunch()) {
+                showOnboardingDialog();
+            }
+            if (mapView != null) {
+                mapView.getMapAsync(map -> {
+                    this.mapLibre = map;
+                    // ПРОВЕРКА: Если стиль уже есть (мы просто вернулись с другого экрана)
+                    if (map.getStyle() != null && map.getStyle().isFullyLoaded()) {
+                        // НИЧЕГО НЕ ДЕЛАЕМ. Карта сама всё помнит: и ветки, и границы.
+                        return;
+                    }
+
+                    String styleUrl = isDark
+                            ? "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+                            : "https://tiles.openfreemap.org/styles/liberty";
+                    map.setStyle(styleUrl, style -> {
+                        // Скрываем UI элементы
+                        map.getUiSettings().setCompassEnabled(false);
+                        map.getUiSettings().setAttributionEnabled(false);
+                        map.getUiSettings().setLogoEnabled(false); // <-- ЭТО КЛЮЧЕВОЙ МЕТОД
+
+                        // Полет в Ереван только при первом запуске
+                        if (map.getCameraPosition().zoom < 3) {
+                            map.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(40.1792, 44.5134), 12), 2000);
+                        }
+                        refreshSavedPoints();
+                        enableLocation(style);
+                        restoreMyData(style);
+                    });
+                    mapLibre.setOnMarkerClickListener(marker -> {
+                        // 1. Находим, на какую именно базу нажал пользователь
+                        SavedLocation clickedLoc = null;
+                        for (SavedLocation loc : uniqueLocations) {
+                            if (loc.latLng.equals(marker.getPosition())) {
+                                clickedLoc = loc;
+                                break;
+                            }
+                        }
+
+                        if (clickedLoc != null) {
+                            // 2. Показываем карточку с данными этой базы
+                            showLocationCard(clickedLoc);
+                        }
+
+                        return true; // "true" значит, что мы сами обработали нажатие
+                    });
+
+                    // ДОБАВЛЯЕМ КЛИК ПО КАРТЕ
+// СЛУШАТЕЛЬ ДЛИННОГО НАЖАТИЯ
+                    map.addOnMapLongClickListener(point -> {
+                        findViewById(android.R.id.content).performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                        // 1. Показываем визуальный getString(R.string.text_auto_105) (пин) на карте
+                        showMarkerAt(point.getLatitude(), point.getLongitude());
+
+                        // 2. Запускаем поиск данных (тот метод, что мы создали ранее)
+                        reverseSearch(point.getLatitude(), point.getLongitude());
+
+                        // true означает, что событие обработано
+                        return true;
+                    });
+
+                    // 2. ОБЫЧНЫЙ КЛИК (Очистка карты)
+                    map.addOnMapClickListener(point -> {
+                        android.graphics.PointF screenPoint = mapLibre.getProjection().toScreenLocation(point);
+                        java.util.List<Feature> features = mapLibre.queryRenderedFeatures(screenPoint);
+
+                        if (!features.isEmpty()) {
+                            Feature feat = features.get(0);
+
+                            // Скрываем оранжевые слои
+                            hideManualOverlays();
+
+                            if (feat.geometry() instanceof Point) {
+                                Point p = (Point) feat.geometry();
+                                // Вместо мгновенного вызова карточки, запускаем поиск адреса
+                                // чтобы получить город и страну для этой аптеки/магазина
+                                reverseSearch(p.latitude(), p.longitude());
+                            }
+                        } else {
+                            clearMapOverlays();
+                        }
+                        return true;
+                    });
+
+                    map.addOnCameraMoveListener(() -> {
+                        double bearing = map.getCameraPosition().bearing;
+
+                        // БЫЛО: FloatingActionButton
+                        // СТАЛО: ImageView
+                        ImageView fabCompass = findViewById(R.id.fabCompass);
+                        if (fabCompass != null) {
+                            fabCompass.setRotation((float) -bearing);
+                        }
+                    });
+                    map.addOnCameraMoveListener(() -> {
+                        // 1. Убедимся, что метка включена и геолокация доступна
+
+                        LocationComponent locationComponent = map.getLocationComponent();
+                        if (locationComponent == null || !locationComponent.isLocationComponentActivated()) {
+                            return;
+                        }
+                        if (centerMarker != null && centerMarker.getVisibility() == View.VISIBLE
+                                && locationComponent != null && locationComponent.getLastKnownLocation() != null) {
+
+                            // 2. Получаем экранные координаты центра метки
+                            android.graphics.PointF markerPoint = new android.graphics.PointF(
+                                    centerMarker.getLeft() + centerMarker.getWidth() / 2f,
+                                    centerMarker.getTop() + centerMarker.getHeight() / 2f
+                            );
+
+                            // 3. Получаем экранные координаты пользователя
+                            LatLng userLatLng = new LatLng(
+                                    locationComponent.getLastKnownLocation().getLatitude(),
+                                    locationComponent.getLastKnownLocation().getLongitude()
+                            );
+                            android.graphics.PointF userPoint = map.getProjection().toScreenLocation(userLatLng);
+
+                            // 4. Рассчитываем расстояние между ними (в пикселях)
+                            double distance = Math.sqrt(
+                                    Math.pow(markerPoint.x - userPoint.x, 2) +
+                                            Math.pow(markerPoint.y - userPoint.y, 2)
+                            );
+
+                            // 5. ЛОГИКА СЛИЯНИЯ (Порог слияния - например, 50 пикселей)
+                            float threshold = dpToPx(50); // Используем твой метод dpToPx
+
+                            if (distance < threshold) {
+                                // Расчет коэффициента слияния (от 0.0 до 1.0)
+                                float fusionFactor = 1.0f - (float) (distance / threshold);
+
+                                // --- ЭФФЕКТ СЛИЯНИЯ ---
+
+                                // А. Метка немного сжимается, getString(R.string.text_auto_106) точку пользователя
+                                float scale = 1.0f - (fusionFactor * 0.15f); // Сжатие до 85%
+                                centerMarker.setScaleX(scale);
+                                centerMarker.setScaleY(scale);
+
+                                // Б. Метка становится немного ярче/насыщеннее (или добавляем свечение через Alpha)
+                                centerMarker.setAlpha(0.8f + (fusionFactor * 0.2f)); // Поднимаем Alpha до 1.0
+
+                                // В. Метка немного опускается, чтобы центр перекрестия совпал с точкой
+                                // (Корректируем translationY, учитывая исходное смещение -2dp)
+                                float translationY = dpToPx(-2) + (fusionFactor * dpToPx(2));
+                                centerMarker.setTranslationY(translationY);
+
+                            } else {
+                                // --- ВОЗВРАТ К ОБЫЧНОМУ СОСТОЯНИЮ (Если пользователь далеко) ---
+                                // Плавная анимация возврата (чтобы не дергалось)
+                                centerMarker.animate().scaleX(1.0f).scaleY(1.0f).translationY(dpToPx(-2)).alpha(1.0f).setDuration(200).start();
+                            }
+                        }
+                    });
+                    mapLibre.addOnCameraMoveListener(() -> {
+                        if (isSearching) return;
+                        // 1. Берем координаты центра экрана (в LatLng и в Пикселях)
+                        org.maplibre.android.geometry.LatLng centerLatLng = mapLibre.getCameraPosition().target;
+                        android.graphics.PointF centerPoint = mapLibre.getProjection().toScreenLocation(centerLatLng);
+
+                        for (SavedLocation loc : uniqueLocations) {
+                            // 2. Переводим координаты каждой базы из LatLng в Пиксели экрана
+                            android.graphics.PointF locPoint = mapLibre.getProjection().toScreenLocation(loc.latLng);
+
+                            // 3. Считаем расстояние в пикселях (Геометрия: корень из суммы квадратов)
+                            float dx = centerPoint.x - locPoint.x;
+                            float dy = centerPoint.y - locPoint.y;
+                            double distanceInPx = Math.sqrt(dx * dx + dy * dy);
+
+                            // 4. Если палец (центр) ближе 40-50 пикселей к маркеру
+                            if (distanceInPx < 50 && distanceInPx > 2) {
+                                // Магнитим камеру прямо в центр объекта
+                                mapLibre.easeCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLng(loc.latLng), 100);
+
+                                // Вибрация getString(R.string.text_auto_107)
+                                findViewById(android.R.id.content).performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+                                break;
+                            }
+                        }
+                    });
+
+                });
+
+            }
+
+        } catch (Exception e) {
+            // Если что-то пойдет совсем не так, мы увидим текст ошибки вместо простого вылета
+            Toast.makeText(this, getString(R.string.text_auto_108) + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private boolean isFirstLaunch() {
+        SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+        boolean first = prefs.getBoolean("first_launch", true);
+        if (first) {
+            prefs.edit().putBoolean("first_launch", false).apply();
+        }
+        return first;
+    }
+
+    private void showOnboardingDialog() {
+        // Используем твой же стиль PremiumDialogTheme
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.PremiumDialogTheme);
+        View view = getLayoutInflater().inflate(R.layout.dialog_onboarding, null);
+        builder.setView(view);
+        AlertDialog dialog = builder.create();
+
+        view.findViewById(R.id.btnGotIt).setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
+    }
+    private void setLocale(String lang) {
+        Locale locale = new Locale(lang);
+        Locale.setDefault(locale);
+        Resources res = getResources();
+        Configuration config = res.getConfiguration();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            config.setLocale(locale);
+        } else {
+            config.locale = locale;
+        }
+        res.updateConfiguration(config, res.getDisplayMetrics());
+    }
+
+    private String getStorageKey() {
+        boolean isGuest = getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                .getBoolean("guest_mode", false);
+        return isGuest ? "guest_travels" : "saved_travels";
+    }
+
+    private void animateSlideInLeft(View view, float screenWidth, int duration) {
+        if (view == null) return;
+        view.setVisibility(View.VISIBLE);
+        view.setTranslationX(-screenWidth);
+        view.animate()
+                .translationX(0f)
+                .alpha(1f)
+                .setDuration(duration)
+                .start();
+    }
+
+    // Вернуть список всех поездок
+    public List<TravelList> getAllTravelLists() {
+        return allLists;
+    }
+
+    // Вернуть текущую активную поездку
+    public TravelList getCurrentActiveList() {
+        return currentActiveList;
+    }
+
+    // Вернуть уникальные локации активной поездки
+    public List<SavedLocation> getUniqueLocations() {
+        return uniqueLocations;
+    }
+
+    // Вернуть путь активной поездки
+    public List<LatLng> getPathPoints() {
+        return pathPoints;
+    }
+
+    // Получить текущее местоположение (если геолокация включена)
+    public android.location.Location getCurrentLocation() {
+        if (mapLibre != null && mapLibre.getLocationComponent().isLocationComponentActivated() && mapLibre.getLocationComponent().getLastKnownLocation() != null) {
+            return mapLibre.getLocationComponent().getLastKnownLocation();
+        }
+        return null;
+    }
+
+    private void fadeOutView(View view, int duration) {
+        view.animate().alpha(0f).setDuration(duration)
+                .withEndAction(() -> view.setVisibility(View.INVISIBLE));
+    }
+    private void setupBottomSheetCallbacks() {
+        sheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                if (newState == BottomSheetBehavior.STATE_COLLAPSED || newState == BottomSheetBehavior.STATE_HIDDEN) {
+                    findViewById(R.id.btnSaveLocation).setEnabled(true);
+                } else {
+                    findViewById(R.id.btnSaveLocation).setEnabled(true);
+                }
+
+                // 🔥 Разрешаем карте принимать жесты, когда BottomSheet свёрнут
+                if (infoCard != null) {
+                    if (newState == BottomSheetBehavior.STATE_COLLAPSED) {
+                        // В свёрнутом виде – делаем некликабельной, чтобы карта получала жесты
+                        infoCard.setClickable(false);
+                        infoCard.setFocusable(false);
+                    } else {
+                        // В развёрнутом или скрытом состоянии – можно кликать
+                        infoCard.setClickable(true);
+                        infoCard.setFocusable(true);
+                    }
+                }
+
+                if (mapLibre != null) {
+                    boolean gesturesEnabled = (newState != BottomSheetBehavior.STATE_EXPANDED);
+                    mapLibre.getUiSettings().setAllGesturesEnabled(gesturesEnabled);
+                }
+
+                if (liquidNav != null) {
+                    liquidNav.setEnabled(newState == BottomSheetBehavior.STATE_HIDDEN);
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+                View saveBtn = findViewById(R.id.btnSaveLocation);
+                if (saveBtn != null) {
+                    float sheetTop = bottomSheet.getTop();
+                    int screenHeight = getResources().getDisplayMetrics().heightPixels;
+                    float buttonDefaultTop = screenHeight - dpToPx(110) - saveBtn.getHeight();
+                    float gap = dpToPx(15);
+                    if (sheetTop < (buttonDefaultTop + saveBtn.getHeight() + gap)) {
+                        float targetY = sheetTop - gap - saveBtn.getHeight();
+                        float offset = targetY - buttonDefaultTop;
+                        saveBtn.setTranslationY(offset);
+                    } else {
+                        saveBtn.setTranslationY(0);
+                    }
+                }
+            }
+        });
+    }
+
+    public void invalidateAiContext() {
+        AiFragment aiFragment = (AiFragment) getSupportFragmentManager().findFragmentById(R.id.aiContainer);
+        if (aiFragment != null) aiFragment.clearCachedContext();
+    }
+
+    private String loadStyleFromAssets() {
+        try {
+            InputStream is = getAssets().open("style.json");
+            int size = is.available();
+            byte[] buffer = new byte[size];
+            is.read(buffer);
+            is.close();
+            return new String(buffer, "UTF-8");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    private void loadTravelDataFromCloud() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            // Гость – просто загружаем локальные данные, не лезем в облако
+            loadLocalBackup();
+            isDataLoaded = true;
+            return;
+        }
+        travelRepository.loadAllLists(new TravelRepository.OnDataLoadedListener() {
+            @Override
+            public void onLoaded(List<TravelList> lists) {
+                if (lists != null && !lists.isEmpty()) {
+                    allLists.clear();
+                    allLists.addAll(lists);
+                    // Удаляем дубликаты
+                    removeDuplicateLists();
+                    // Сортируем
+                    Collections.sort(allLists, (a, b) -> a.name.compareToIgnoreCase(b.name));
+                } else {
+                    allLists.clear();
+                    allLists.add(new TravelList(getString(R.string.text_auto_109)));
+                    syncAllDataToCloud();
+                }
+                currentActiveList = allLists.get(0);
+                uniqueLocations = currentActiveList.locations;
+                pathPoints = currentActiveList.pathPoints;
+
+                saveAllData();
+
+                if (listAdapter != null) listAdapter.notifyDataSetChanged();
+                refreshSavedPoints();
+                isDataLoaded = true;
+            }
+
+            @Override
+            public void onError(String error) {
+                Log.e("Firestore", error);
+                loadLocalBackup();
+            }
+        });
+    }
+    private void removeDuplicateLists() {
+        List<TravelList> unique = new ArrayList<>();
+        for (TravelList list : allLists) {
+            boolean exists = false;
+            for (TravelList existing : unique) {
+                if (existing.name.equals(list.name)) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                unique.add(list);
+            }
+        }
+        allLists.clear();
+        allLists.addAll(unique);
+    }
+    private void loadLocalBackup() {
+
+        loadAllData(); // загружает из SharedPreferences
+        if (allLists != null && !allLists.isEmpty()) {
+            currentActiveList = allLists.get(0);
+            uniqueLocations = currentActiveList.locations;
+            pathPoints = currentActiveList.pathPoints;
+            if (listAdapter != null) listAdapter.notifyDataSetChanged();
+            isDataLoaded = true;
+            refreshSavedPoints();
+            Toast.makeText(this, getString(R.string.text_auto_110), Toast.LENGTH_SHORT).show();
+            // При первой возможности сохраним их в облако
+            if (travelRepository != null) {
+                syncAllDataToCloud();
+            }
+        }
+    }
+    private void syncAllDataToCloud() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        if (!isDataLoaded) return; // ещё не загрузились, не надо сохранять
+        travelRepository.saveAllLists(allLists, new TravelRepository.OnSaveListener() {
+            @Override
+            public void onSuccess() {
+                // можно ничего не делать, или показать тост раз в несколько сохранений
+            }
+            @Override
+            public void onError(String error) {
+                Log.e("Firestore", getString(R.string.text_auto_111) + error);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, getString(R.string.text_auto_61) + error, Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+    private void setupRecyclerView() {
+        rvTravelLists = findViewById(R.id.rvTravelLists); // Убедись, что ID совпадает с XML
+        TextView tvCount = findViewById(R.id.tvTravelCount);
+        updateTravelCount(); // метод, который установит цифру
+
+        tvCount.setOnClickListener(v -> {
+            TravelListSheetFragment sheet = new TravelListSheetFragment();
+            sheet.show(getSupportFragmentManager(), "travel_list_sheet");
+        });
+
+// Обновление цифры при изменениях
+        if (rvTravelLists != null) {
+            // 1. Настраиваем менеджер компоновки (Горизонтальный список)
+            LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
+            rvTravelLists.setLayoutManager(layoutManager);
+
+            // 2. Создаем адаптер и передаем туда наш список всех поездок
+            listAdapter = new TravelListAdapter(allLists, new TravelListAdapter.OnListClickListener() {
+                @Override
+                public void onListClick(int position) {
+                    // Переключаемся на другую ветку (поездку)
+                    switchTravelList(position);
+                }
+
+                @Override
+                public void onListRename(int position, String oldName) {
+                    // Вызываем твой диалог переименования
+                    showRenameDialog(position, allLists.get(position).name,null);
+                }
+            });
+
+            rvTravelLists.setAdapter(listAdapter);
+
+            // Чтобы список не getString(R.string.text_auto_112)
+            //rvTravelLists.setHasFixedSize(true);
+        }
+    }
+    public void removeTravelListByIndex(int index) {
+        if (index >= 0 && index < allLists.size()) {
+            deleteTravelList(index); // уже умеет удалять и обновлять UI
+        }
+    }
+    public int getActiveListIndex() {
+        return allLists.indexOf(currentActiveList);
+    }
+    public void switchTravelList(int position) {
+        saveAllData();
+
+        currentActiveList = allLists.get(position);
+
+        if (currentActiveList.pathPoints == null)
+            currentActiveList.pathPoints = new ArrayList<>();
+        if (currentActiveList.locations == null)
+            currentActiveList.locations = new ArrayList<>();
+
+        pathPoints = currentActiveList.pathPoints;
+        uniqueLocations = currentActiveList.locations;
+        invalidateAiContext();
+        refreshSavedPoints();
+
+        // 👇 Обновляем выделение в ползунке
+        if (listAdapter != null) {
+            listAdapter.setSelectedIndex(position);
+        }
+
+        if (!uniqueLocations.isEmpty()) {
+            mapLibre.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(uniqueLocations.get(0).latLng, 14), 1000);
+        }
+    }
+
+
+
+    private void restoreMyData(org.maplibre.android.maps.Style style) {
+        // А. Восстанавливаем маркеры (Базы)
+        // Если ты используешь старые Annotations:
+        for (SavedLocation loc : uniqueLocations) {
+            mapLibre.addMarker(new org.maplibre.android.annotations.MarkerOptions()
+                    .position(loc.latLng)
+                    .icon(createPremiumMarker(loc))
+                    .title(loc.customName));
+        }
+
+        // Б. Восстанавливаем Ветки (Пути)
+        if (pathPoints.size() > 1) {
+            // Если используешь Polyline:
+            mapLibre.addPolyline(new org.maplibre.android.annotations.PolylineOptions()
+                    .addAll(pathPoints)
+                    .color(Color.parseColor("#FF9800"))
+                    .width(dpToPx(4)));
+        }
+    }
+    private void updateTravelCount() {
+        TextView tvCount = findViewById(R.id.tvTravelCount);
+        if (tvCount != null) {
+            tvCount.setText(String.valueOf(allLists.size()));
+        }
+    }
+    private void showLocationCard(SavedLocation loc) {
+        BottomSheetDialog dialog = new BottomSheetDialog(this, R.style.TransparentBottomSheetDialog);
+        View view = getLayoutInflater().inflate(R.layout.layout_location_card, null);
+        dialog.setContentView(view);
+
+        TextView titleView = view.findViewById(R.id.cardTitle);
+        View btnEdit = view.findViewById(R.id.btnEditTitle);
+        EditText descInput = view.findViewById(R.id.cardDescription);
+        LinearLayout photoContainer = view.findViewById(R.id.photoContainer);
+        ImageView btnAddPhoto = view.findViewById(R.id.btnAddPhoto);
+        Slider ratingSlider = view.findViewById(R.id.ratingSlider);
+        View btnPickDate = view.findViewById(R.id.btnPickDate);
+        TextView tvDateDisplay = view.findViewById(R.id.tvDateDisplay);
+
+        // Заголовок
+        titleView.setText(loc.customName.isEmpty() ? getString(R.string.text_auto_113) : loc.customName);
+        btnEdit.setOnClickListener(v -> showNameEditDialog(loc, titleView));
+
+        Button btnDeleteLocation = view.findViewById(R.id.btnDeleteLocation);
+        // Описание
+        descInput.setText(loc.note);
+        descInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                loc.note = s.toString();
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+
+        // Отображаем список фото
+        renderPhotosInCard(loc, photoContainer);
+
+        // Кнопка добавления фото (квадрат с плюсом)
+        btnAddPhoto.setOnClickListener(v -> {
+            currentlyEditingLocation = loc;
+            openGallery();
+            dialog.dismiss();
+        });
+
+        // Рейтинг
+        ratingSlider.setValue(loc.rating);
+        ratingSlider.addOnChangeListener((slider, value, fromUser) -> {
+            if (fromUser) loc.rating = value;
+        });
+
+        // Дата
+        if (loc.date != null && !loc.date.isEmpty()) {
+            tvDateDisplay.setText(loc.date);
+            tvDateDisplay.setTextColor(Color.parseColor("#FF9800"));
+        }
+        btnPickDate.setOnClickListener(v -> showDatePicker(loc, tvDateDisplay));
+
+
+
+        btnDeleteLocation.setOnClickListener(v -> {
+            View dialogView = getLayoutInflater().inflate(R.layout.dialog_delete_point, null);
+
+            AlertDialog deleteDialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                    .setView(dialogView)
+                    .create();
+
+            // Исправлено: deleteView вместо view
+            dialogView.findViewById(R.id.btnConfirmDelete).setOnClickListener(deleteView -> {
+                // 1. Удаляем физические файлы фото
+                if (loc.photoPaths != null) {
+                    for (String photoPath : loc.photoPaths) {
+                        File file = new File(photoPath);
+                        if (file.exists()) file.delete();
+                    }
+                }
+
+                // 2. Находим координаты удаляемой точки
+                LatLng coordToRemove = loc.latLng;
+
+                // 3. Удаляем координату из pathPoints (по значению)
+                java.util.Iterator<LatLng> iterator = pathPoints.iterator();
+                while (iterator.hasNext()) {
+                    LatLng point = iterator.next();
+                    if (point.equals(coordToRemove)) {
+                        iterator.remove();
+                        break;
+                    }
+                }
+
+                // 4. Удаляем точку из списка
+                uniqueLocations.remove(loc);
+
+                // 5. Синхронизируем текущий активный список
+                currentActiveList.locations = new ArrayList<>(uniqueLocations);
+                currentActiveList.pathPoints = new ArrayList<>(pathPoints);
+
+                // 6. Обновляем карту
+                refreshSavedPoints();
+
+                // 7. Сохраняем изменения
+                saveAllData();
+                syncAllDataToCloud();
+
+                // 8. Закрываем диалоги
+                deleteDialog.dismiss();
+                dialog.dismiss();
+
+                Toast.makeText(this, getString(R.string.text_auto_114), Toast.LENGTH_SHORT).show();
+            });
+
+            dialogView.findViewById(R.id.btnCancelDelete).setOnClickListener(deleteView -> deleteDialog.dismiss());
+
+            deleteDialog.show();
+        });
+
+        dialog.setOnDismissListener(d -> {
+            saveAllData();
+            syncAllDataToCloud();
+        });
+        dialog.show();
+    }
+
+    private void renderPhotosInCard(SavedLocation loc, LinearLayout container) {
+        if (container == null) return;
+        container.removeAllViews();
+
+        int imgSize = (int) dpToPx(120);
+        int margin = (int) dpToPx(12);
+        int deleteBtnSize = (int) dpToPx(32);
+
+        for (int i = 0; i < loc.photoPaths.size(); i++) {
+            final int photoIndex = i;
+            String photoPath = loc.photoPaths.get(i);
+            File file = new File(photoPath);
+            Log.d("Photo", getString(R.string.text_auto_115) + i + ": " + photoPath + getString(R.string.text_auto_116) + file.exists());
+            if (!file.exists()) continue;
+
+            // Карточка фото
+            MaterialCardView card = new MaterialCardView(this);
+            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(imgSize, imgSize);
+            cardParams.setMargins(0, 0, margin, 0);
+            card.setLayoutParams(cardParams);
+            card.setRadius(dpToPx(16));
+            card.setCardElevation(dpToPx(4));
+            card.setCardBackgroundColor(Color.parseColor("#66FFFFFF"));
+            card.setStrokeColor(Color.parseColor("#FF9800"));
+            card.setStrokeWidth(dpToPx(2));
+            card.setClipToOutline(true);
+
+            // Само фото
+            ImageView imageView = new ImageView(this);
+            imageView.setLayoutParams(new FrameLayout.LayoutParams(-1, -1));
+            imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            Glide.with(this).load(file).centerCrop().into(imageView);
+            // ========== ДОБАВЬ ЭТУ СТРОЧКУ ==========
+            imageView.setOnClickListener(v -> showFullscreenPhoto(photoPath));
+            // ======================================
+            card.addView(imageView);
+
+            // Кнопка удаления (красивая корзина)
+            ImageView btnDelete = new ImageView(this);
+            FrameLayout.LayoutParams delParams = new FrameLayout.LayoutParams(deleteBtnSize, deleteBtnSize);
+            delParams.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+            delParams.setMargins(0, (int) dpToPx(8), (int) dpToPx(8), 0);
+            btnDelete.setLayoutParams(delParams);
+            btnDelete.setImageResource(R.drawable.ic_trash_premium);
+            btnDelete.setColorFilter(Color.WHITE);
+
+            // Красивый полупрозрачный фон для кнопки удаления
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            bg.setColor(Color.parseColor("#CCFF5252"));
+            btnDelete.setBackground(bg);
+            btnDelete.setPadding((int) dpToPx(6), (int) dpToPx(6), (int) dpToPx(6), (int) dpToPx(6));
+            btnDelete.setClickable(true);
+            btnDelete.setFocusable(true);
+
+            btnDelete.setOnClickListener(v -> {
+                new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                        .setTitle(getString(R.string.text_auto_117))
+                        .setMessage(getString(R.string.text_auto_118))
+                        .setPositiveButton(getString(R.string.text_auto_119), (dialog, which) -> {
+                            // 1. Удаляем физический файл с телефона
+                            File photoFile = new File(photoPath);
+                            if (photoFile.exists()) {
+                                photoFile.delete();
+                            }
+
+                            // 2. Удаляем из списка в памяти
+                            loc.photoPaths.remove(photoIndex);
+                            loc.cachedIcon = null;
+
+                            // 3. Обновляем UI
+                            renderPhotosInCard(loc, container);
+                            refreshSavedPoints();
+
+                            // 4. Сохраняем изменения
+                            saveAllData();
+                            syncAllDataToCloud();
+
+                            v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                            Toast.makeText(this, getString(R.string.text_auto_120), Toast.LENGTH_SHORT).show();
+                        })
+                        .setNegativeButton(getString(R.string.text_auto_121), null)
+                        .show();
+            });
+
+
+            card.addView(btnDelete);
+            container.addView(card);
+        }
+    }
+    private void showFullscreenPhoto(String photoPath) {
+        File file = new File(photoPath);
+        if (!file.exists()) {
+            Toast.makeText(this, getString(R.string.text_auto_122), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Создаём диалог
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.FullscreenDialogTheme);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_fullscreen_photo, null);
+        builder.setView(dialogView);
+
+        AlertDialog dialog = builder.create();
+
+        ImageView ivPhoto = dialogView.findViewById(R.id.ivFullscreenPhoto);
+        ImageView btnClose = dialogView.findViewById(R.id.btnCloseFullscreen);
+
+        // Загружаем фото с правильными настройками
+        Glide.with(this)
+                .load(file)
+                .fitCenter()
+                .override(1080, 1920)  // Максимальный размер
+                .into(ivPhoto);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        ivPhoto.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
+    }
+    // Новый способ: открывает именно фото-пикер с альбомами
+    private void showDatePicker(SavedLocation loc, TextView tvDateDisplay) {
+        // 1. Берем текущую дату из календаря как точку отсчета
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        int year = c.get(java.util.Calendar.YEAR);
+        int month = c.get(java.util.Calendar.MONTH);
+        int day = c.get(java.util.Calendar.DAY_OF_MONTH);
+
+        // 2. Создаем диалог
+        android.app.DatePickerDialog datePickerDialog = new android.app.DatePickerDialog(
+                this,
+                // Используем системную тему для диалога
+                android.R.style.Theme_DeviceDefault_Dialog_Alert,
+                (view, selectedYear, monthOfYear, dayOfMonth) -> {
+
+                    // 3. Форматируем выбранную дату красиво
+                    java.util.Calendar selectedCal = java.util.Calendar.getInstance();
+                    selectedCal.set(selectedYear, monthOfYear, dayOfMonth);
+
+                    // "dd MMMM yyyy" превратит дату в getString(R.string.text_auto_123)
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd MMMM yyyy", java.util.Locale.getDefault());
+                    String formattedDate = sdf.format(selectedCal.getTime());
+
+                    // 4. Обновляем данные в объекте и на экране
+                    loc.date = formattedDate;
+                    tvDateDisplay.setText(formattedDate);
+                    tvDateDisplay.setTextColor(android.graphics.Color.parseColor("#FF9800")); // Оранжевый акцент
+
+                    // 5. Сохраняем в память
+                    saveAllData();
+                    syncAllDataToCloud();
+                },
+                year, month, day);
+
+        datePickerDialog.show();
+    }
+    private void showNameEditDialog(SavedLocation loc, TextView titleView) {
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setText(loc.customName.isEmpty() ? titleView.getText() : loc.customName);
+        input.setSelection(input.getText().length());
+
+        // Добавим отступы внутри поля ввода для красоты
+        int padding = (int) dpToPx(20);
+        input.setPadding(padding, padding, padding, padding);
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.text_auto_124))
+                .setView(input)
+                .setPositiveButton(getString(R.string.text_auto_125), (d, which) -> {
+                    String newName = input.getText().toString().trim();
+                    if (!newName.isEmpty()) {
+                        loc.customName = newName;
+                        titleView.setText(newName);
+
+                        // Сбрасываем кэш иконки и перерисовываем маркеры на карте
+                        loc.cachedIcon = null;
+                        refreshSavedPoints();
+                        saveAllData();
+                        syncAllDataToCloud();
+
+                        // Прячем клавиатуру
+                        android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                        imm.hideSoftInputFromWindow(input.getWindowToken(), 0);
+                    }
+                })
+                .setNegativeButton(getString(R.string.text_auto_121), null)
+                .show();
+    }
+
+    // Исправленный метод openGallery
+    private void openGallery() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        // Это подсказка системе показать именно внутреннее хранилище
+        intent.putExtra("android.content.extra.SHOW_ADVANCED", true);
+
+        // Запускаем через наш Launcher
+        galleryLauncher.launch(intent);
+    }
+    // Регистратор для выбора картинки
+    // 1. Объявляем лончер, который умеет принимать Intent
+    private final androidx.activity.result.ActivityResultLauncher<Intent> galleryLauncher = registerForActivityResult(
+            new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    if (uri != null && currentlyEditingLocation != null) {
+                        String localPath = copyPhotoToPrivateStorage(uri);
+                        if (localPath != null) {
+                            currentlyEditingLocation.photoPaths.add(localPath);
+                            currentlyEditingLocation.cachedIcon = null;
+                            refreshSavedPoints();
+                            showLocationCard(currentlyEditingLocation);
+                        } else {
+                            Toast.makeText(this, getString(R.string.text_auto_126), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            }
+    );
+
+    private void hideManualOverlays() {
+        mapLibre.getStyle(style -> {
+            // Прячем ручную точку
+// В hideManualOverlays и clearMapOverlays:
+            Layer marker = style.getLayer("marker-layer");
+            Layer shadow = style.getLayer("marker-shadow");
+            if (marker != null) marker.setProperties(PropertyFactory.visibility(Property.VISIBLE));
+            if (shadow != null) shadow.setProperties(PropertyFactory.visibility(Property.VISIBLE));
+            // Прячем границы районов
+            if (style.getSource("boundary-source") != null) {
+                style.removeLayer("boundary-layer");
+                style.removeLayer("outline-layer");
+                style.removeSource("boundary-source");
+            }
+        });
+    }
+
+    private void clearMapOverlays() {
+        if (mapLibre == null) return;
+        mapLibre.getUiSettings().setAllGesturesEnabled(true); // Включаем обратно
+
+        mapLibre.getStyle(style -> {
+            // 1. Скрываем указатель (пин)
+            // В hideManualOverlays и clearMapOverlays:
+            Layer marker = style.getLayer("marker-layer");
+            Layer shadow = style.getLayer("marker-shadow");
+            if (marker != null) marker.setProperties(PropertyFactory.visibility(Property.VISIBLE));
+            if (shadow != null) shadow.setProperties(PropertyFactory.visibility(Property.VISIBLE));
+            // 2. Убираем границы районов
+            if (style.getSource("boundary-source") != null) {
+                style.removeLayer("boundary-layer");
+                style.removeLayer("outline-layer");
+                style.removeSource("boundary-source");
+            }
+        });
+
+        // 3. Прячем карточку информации
+        if (sheetBehavior != null) {
+            sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        }
+
+        // Сбрасываем положение кнопки getString(R.string.text_auto_125)
+        View saveBtn = findViewById(R.id.btnSaveLocation);
+        if (saveBtn != null) {
+            saveBtn.animate().translationY(0).setDuration(300).start();
+        }
+    }
+
+    private void showMarkerAt(double lat, double lon) {
+        mapLibre.getStyle(style -> {
+            // ПЕРВЫМ ДЕЛОМ: Удаляем старые границы, если они были
+            if (style.getSource("boundary-source") != null) {
+                style.removeLayer("boundary-layer");
+                style.removeLayer("outline-layer");
+                style.removeSource("boundary-source");
+            }
+
+            String geoJson = "{ \"type\": \"FeatureCollection\", \"features\": [{ \"type\": \"Feature\", \"geometry\": { \"type\": \"Point\", \"coordinates\": [" + lon + ", " + lat + "] } }] }";
+            org.maplibre.android.style.sources.GeoJsonSource markerSource = (org.maplibre.android.style.sources.GeoJsonSource) style.getSource("selected-point-source");
+
+            if (markerSource != null) {
+                markerSource.setGeoJson(geoJson);
+            } else {
+                style.addSource(new org.maplibre.android.style.sources.GeoJsonSource("selected-point-source", geoJson));
+                // Слой тени
+                style.addLayer(new org.maplibre.android.style.layers.CircleLayer("marker-shadow", "selected-point-source")
+                        .withProperties(
+                                org.maplibre.android.style.layers.PropertyFactory.circleColor(Color.parseColor("#FF9800")),
+                                org.maplibre.android.style.layers.PropertyFactory.circleRadius(12f),
+                                org.maplibre.android.style.layers.PropertyFactory.circleBlur(0.8f),
+                                org.maplibre.android.style.layers.PropertyFactory.circleOpacity(0.6f)
+                        ));
+                // Основной слой
+                style.addLayer(new org.maplibre.android.style.layers.CircleLayer("marker-layer", "selected-point-source")
+                        .withProperties(
+                                org.maplibre.android.style.layers.PropertyFactory.circleColor(Color.parseColor("#FF9800")),
+                                org.maplibre.android.style.layers.PropertyFactory.circleRadius(8f),
+                                org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor(Color.WHITE),
+                                org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth(3f)
+                        ));
+            }
+
+            // Гарантируем видимость точки (на случай если она была скрыта прошлым поиском района)
+            org.maplibre.android.style.layers.Layer mainLayer = style.getLayer("marker-layer");
+            if (mainLayer != null)
+                mainLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.VISIBLE));
+        });
+    }
+
+    private void reverseSearch(double lat, double lon) {
+        new Thread(() -> {
+            try {
+                String urlString = "https://nominatim.openstreetmap.org/reverse?format=json"
+                        + "&lat=" + lat + "&lon=" + lon + "&zoom=18&addressdetails=1&accept-language=ru,en";
+
+                URL url = new URL(urlString);
+                HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                con.setRequestProperty("User-Agent", "OzTrip_App");
+
+                BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+                StringBuilder res = new StringBuilder();
+                String line;
+                while ((line = in.readLine()) != null) res.append(line);
+                in.close();
+
+                JSONObject result = new JSONObject(res.toString());
+                String displayName = result.optString("display_name", getString(R.string.text_auto_127));
+                String shortName = displayName.split(",")[0];
+                String type = result.optString("type", "point"); // ТИП ТУТ
+                JSONObject geojson = result.optJSONObject("geojson");
+
+                runOnUiThread(() -> {
+                    // 1. Центрируем камеру
+                    // Замени строку в runOnUiThread внутри reverseSearch:
+                    CameraPosition pos = new CameraPosition.Builder()
+                            .target(new LatLng(lat, lon))
+                            .zoom(15.5f) // Чуть ближе для деталей
+                            .tilt(0)    // Легкий наклон для 3D эффекта
+                            .build();
+
+                    mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 1200);
+
+                    // 2. Определяем типы для карточки
+                    String displayType = getString(R.string.text_auto_113);
+                    // Внутри reverseSearch -> runOnUiThread
+                    JSONObject address = result.optJSONObject("address");
+                    String city = "";
+                    String country = "";
+
+                    if (address != null) {
+                        // Nominatim может называть город по-разному: city, town, village или suburb
+                        city = address.optString("city", address.optString("town", address.optString("village", address.optString("suburb", ""))));
+                        country = address.optString("country", "");
+                    }
+
+// Формируем строку для нижней плашки (txtFlora)
+                    String locationInfo = country;
+                    if (!city.isEmpty()) {
+                        locationInfo = city + ", " + country;
+                    }
+                    if (locationInfo.isEmpty()) locationInfo = getString(R.string.text_auto_128);
+
+
+                    // Вызываем карточку (передаем locationInfo в параметр floraType)
+                    showPremiumCard(shortName, displayType, locationInfo.toUpperCase(), lat, lon);
+
+
+                    // 4. Рисуем границы, если есть
+                    if (geojson != null) drawBoundary(geojson);
+
+                    // 5. УПРАВЛЕНИЕ УКАЗАТЕЛЕМ (Теперь внутри потока UI и после получения type)
+                    mapLibre.getStyle(style -> {
+                        org.maplibre.android.style.layers.Layer mainLayer = style.getLayer("marker-layer");
+                        org.maplibre.android.style.layers.Layer shadowLayer = style.getLayer("marker-shadow");
+
+                        if (mainLayer != null && shadowLayer != null) {
+                            if (type.matches(".*(administrative|suburb|district|city|town).*")) {
+                                // Если это территория — скрываем точку
+                                mainLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
+                                shadowLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
+                            } else {
+                                // Если это объект — показываем точку
+                                mainLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.VISIBLE));
+                                shadowLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.VISIBLE));
+                            }
+                        }
+                    });
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_129), Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private void setupButtons() {
+
+
+// Кнопка ПЛЮСИК (btnAddList)
+        findViewById(R.id.btnAddList).setOnClickListener(v -> {
+            Log.d("OzTrip1", getString(R.string.text_auto_130) + allLists.size());
+            TravelList newList = new TravelList(getString(R.string.text_auto_131) + " " + (allLists.size() + 1));
+            allLists.add(newList);
+            Log.d("OzTrip1", getString(R.string.text_auto_132) + allLists.size());
+
+            int newIndex = allLists.size() - 1;
+            listAdapter.notifyItemInserted(newIndex);
+            Log.d("OzTrip1", getString(R.string.text_auto_133) + newIndex);
+
+            rvTravelLists.smoothScrollToPosition(newIndex);
+
+            currentActiveList = newList;
+            uniqueLocations = currentActiveList.locations;
+            pathPoints = currentActiveList.pathPoints;
+
+            listAdapter.setSelectedIndex(newIndex);
+
+            refreshSavedPoints();
+            saveAllData();
+            syncAllDataToCloud();
+            updateTravelCount();
+        });
+        // Поиск
+        // Поиск – кастомный премиум-диалог
+        View btnSearch = findViewById(R.id.btnSearch);
+        if (btnSearch != null) {
+            btnSearch.setOnClickListener(v -> {
+                View dialogView = getLayoutInflater().inflate(R.layout.dialog_search, null);
+                EditText etQuery = dialogView.findViewById(R.id.etSearchQuery);
+                String hintText = getString(R.string.text_auto_134);
+                SpannableString ss = new SpannableString(hintText);
+                AbsoluteSizeSpan sizeSpan = new AbsoluteSizeSpan(14, true); // размер в sp
+                ss.setSpan(sizeSpan, 0, ss.length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
+                etQuery.setHint(new SpannedString(ss));
+
+                AlertDialog searchDialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                        .setView(dialogView)
+                        .create();
+
+                // Кнопка getString(R.string.text_auto_135)
+                dialogView.findViewById(R.id.btnStartSearch).setOnClickListener(view -> {
+                    String query = etQuery.getText().toString().trim();
+                    if (!query.isEmpty()) {
+                        searchDialog.dismiss();
+                        searchLocation(query);
+                    } else {
+                        Toast.makeText(this, getString(R.string.text_auto_136), Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+                // Кнопка getString(R.string.text_auto_121)
+                dialogView.findViewById(R.id.btnCancelSearch).setOnClickListener(view -> searchDialog.dismiss());
+
+                // Поиск по нажатию Enter на клавиатуре
+                etQuery.setOnEditorActionListener((textView, actionId, event) -> {
+                    if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                        String query = etQuery.getText().toString().trim();
+                        if (!query.isEmpty()) {
+                            searchDialog.dismiss();
+                            searchLocation(query);
+                        } else {
+                            Toast.makeText(this, getString(R.string.text_auto_136), Toast.LENGTH_SHORT).show();
+                        }
+                        return true;
+                    }
+                    return false;
+                });
+
+                searchDialog.show();
+            });
+        }
+        View saveBtn = findViewById(R.id.btnSaveLocation);
+        if (saveBtn != null) {
+            saveBtn.setOnClickListener(v -> {
+                LatLng currentPos = mapLibre.getCameraPosition().target;
+                SavedLocation newLoc = new SavedLocation(currentPos);
+
+                uniqueLocations.add(newLoc);
+                pathPoints.add(currentPos);
+
+                invalidateAiContext();   // чтобы ИИ увидел новую точку
+                refreshSavedPoints();
+                saveAllData();
+                syncAllDataToCloud();
+                v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+
+                // Закрываем информационную карточку (если открыта)
+                if (sheetBehavior != null && sheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN) {
+                    sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                }
+
+                // Мгновенно открываем редактор для только что созданной точки
+                showLocationCard(newLoc);
+            });
+        }
+
+        // Кнопка закрытия карточки
+        View btnClose = findViewById(R.id.btnCloseInfo);
+        if (btnClose != null) {
+            btnClose.setOnClickListener(v -> {
+                if (sheetBehavior != null) {
+                    sheetBehavior.setState(com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_HIDDEN);
+                }
+            });
+        }
+        if (mapLibre != null) {
+            mapLibre.getUiSettings().setAllGesturesEnabled(true); // Включаем обратно
+        }
+        // Кнопка Компаса (выравнивание на Север)
+        // Внутри setupButtons()
+        View fabCompass = findViewById(R.id.fabCompass); // Здесь можно оставить View
+        if (fabCompass != null) {
+            fabCompass.setOnClickListener(v -> {
+                if (mapLibre != null) {
+                    CameraPosition pos = new CameraPosition.Builder(mapLibre.getCameraPosition())
+                            .bearing(0)
+                            .tilt(0)
+                            .build();
+                    mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 1000);
+                    v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                }
+            });
+            TooltipCompat.setTooltipText(fabCompass, "Компас: повернуть карту на север");
+        }
+// Находим нашу новую оранжевую кнопку по ID
+        final ImageView btnAction = findViewById(R.id.fabAction);
+
+        if (btnAction != null) {
+            btnAction.setOnClickListener(v -> {
+                if (mapLibre != null && mapLibre.getLocationComponent() != null
+                        && mapLibre.getLocationComponent().isLocationComponentActivated()
+                        && mapLibre.getLocationComponent().getLastKnownLocation() != null) {
+
+                    // 1. АНИМАЦИЯ НАЖАТИЯ
+                    btnAction.animate().scaleX(0.8f).scaleY(0.8f).setDuration(150)
+                            .withEndAction(() -> btnAction.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start());
+
+                    // 2. ВИБРАЦИЯ
+                    v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+
+                    // 3. ПОЛЕТ КАМЕРЫ
+                    android.location.Location loc = mapLibre.getLocationComponent().getLastKnownLocation();
+                    CameraPosition pos = new CameraPosition.Builder()
+                            .target(new LatLng(loc.getLatitude(), loc.getLongitude()))
+                            .zoom(16f)
+                            .bearing(0)
+                            .tilt(0)
+                            .build();
+
+                    mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 2000);
+
+                    Toast.makeText(this, getString(R.string.text_auto_137), Toast.LENGTH_SHORT).show();
+
+                } else {
+                    Toast.makeText(this, getString(R.string.text_auto_138), Toast.LENGTH_SHORT).show();
+                }
+            });
+            btnAction.setTooltipText("Переместить карту к моему местоположению");
+        }
+
+// 1. Находим кнопку ОДИН РАЗ
+        final ImageView btnTarget = findViewById(R.id.fabTarget);
+
+        if (btnTarget != null) {
+            btnTarget.setOnClickListener(v -> {
+                if (mapLibre != null) {
+                    // 1. ЭФФЕКТ: Анимация кнопки (упругий клик)
+                    btnTarget.animate().scaleX(0.85f).scaleY(0.85f).setDuration(100)
+                            .withEndAction(() -> btnTarget.animate().scaleX(1.0f).scaleY(1.0f).start());
+
+                    // 2. Вибрация
+                    v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+
+                    // 3. ПРЯМОЙ ПОЛЕТ К БАЗЕ (homeLatLng)
+                    // Мы убираем проверку GPS, чтобы кнопка всегда вела в одну точку
+                    CameraPosition position = new CameraPosition.Builder()
+                            .target(homeLatLng) // Твои координаты 40.1792, 44.5134
+                            .zoom(15.5f)
+                            .bearing(0)
+                            .tilt(0)
+                            .build();
+
+                    mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(position), 2000);
+
+                    Toast.makeText(this, getString(R.string.text_auto_139), Toast.LENGTH_SHORT).show();
+                }
+            });
+            // Кнопка "местоположение объекта"
+            btnAction.setTooltipText("Переместить карту к местоположению объекта");
+        }
+
+
+// Находим элементы
+
+
+// Находим элементы
+        final View centerMarker = findViewById(R.id.centerMarker);
+        final ImageView imgToggle = findViewById(R.id.fabToggleMarker); // ImageView!
+
+        if (imgToggle != null && centerMarker != null) {
+            // 1. НАСТРОЙКА НАЧАЛЬНОГО СОСТОЯНИЯ (Default)
+            centerMarker.setVisibility(View.VISIBLE);
+
+            // Очищаем фильтры, ставим открытый глаз, кнопка яркая
+            imgToggle.setImageResource(R.drawable.ic_btn_eye_open);
+            imgToggle.clearColorFilter();
+            imgToggle.setColorFilter(Color.parseColor("#757575"));
+            imgToggle.setAlpha(1.0f);
+
+
+            // 2. ОБРАБОТЧИК КЛИКА
+            imgToggle.setOnClickListener(v -> {
+                if (centerMarker.getVisibility() == View.VISIBLE) {
+                    // СКРЫВАЕМ МЕТКУ С АНИМАЦИЕЙ
+                    centerMarker.animate()
+                            .alpha(0f)
+                            .scaleX(0.5f)
+                            .scaleY(0.5f)
+                            .setDuration(200)
+                            .withEndAction(() -> centerMarker.setVisibility(View.GONE));
+
+                    // --- ЭФФЕКТ getString(R.string.text_auto_140) И ПЕРЕЧЕРКИВАНИЯ КНОПКИ ---
+                    // Анимация подмены иконки (сжатие и возврат)
+                    imgToggle.animate().scaleX(0.8f).scaleY(0.8f).setDuration(100)
+                            .withEndAction(() -> {
+                                // Ставим перечеркнутый глаз
+                                imgToggle.setImageResource(R.drawable.ic_btn_eye_closed);
+
+                                // Применяем серый фильтр, чтобы кнопка getString(R.string.text_auto_141)
+                                imgToggle.setColorFilter(Color.parseColor("#757575"));
+                                imgToggle.setAlpha(0.6f);
+
+                                imgToggle.animate().scaleX(1.0f).scaleY(1.0f).start();
+                            });
+
+                    v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
+
+                    Toast.makeText(this, getString(R.string.text_auto_142), Toast.LENGTH_SHORT).show();
+
+                } else {
+                    // ПОКАЗЫВАЕМ МЕТКУ
+                    centerMarker.setVisibility(View.VISIBLE);
+                    centerMarker.setScaleX(0.5f);
+                    centerMarker.setScaleY(0.5f);
+                    centerMarker.animate()
+                            .alpha(1f)
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .setDuration(250);
+
+                    // --- ЭФФЕКТ getString(R.string.text_auto_143) И ОТКРЫТИЯ КНОПКИ ---
+                    // Анимация вспышки (увеличение и возврат)
+                    imgToggle.animate().scaleX(1.1f).scaleY(1.1f).setDuration(150)
+                            .withEndAction(() -> {
+                                // Ставим открытый глаз
+                                imgToggle.setImageResource(R.drawable.ic_btn_eye_open);
+
+                                // Убираем серый фильтр, возвращая яркий оранжевый
+                                imgToggle.clearColorFilter();
+                                imgToggle.setAlpha(1.0f);
+
+                                imgToggle.animate().scaleX(1.0f).scaleY(1.0f).start();
+                            });
+
+                    v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+
+                    Toast.makeText(this, getString(R.string.text_auto_144), Toast.LENGTH_SHORT).show();
+                }
+            });
+            imgToggle.setTooltipText("Скрыть или показать центральную метку");
+        }
+
+
+    }
+    public LiquidSegmentedControl getLiquidNav() {
+        return liquidNav;
+    }
+    public void createTrip(String name) {
+        TravelList newList = new TravelList(name);
+        allLists.add(newList);
+        currentActiveList = newList;
+        uniqueLocations = newList.locations;
+        pathPoints = newList.pathPoints;
+        if (listAdapter != null) {
+            listAdapter.notifyDataSetChanged();
+            listAdapter.setSelectedIndex(allLists.size() - 1);
+        }
+        refreshSavedPoints();
+        saveAllData();
+        syncAllDataToCloud();
+        updateTravelCount();
+        invalidateAiContext();
+    }
+
+    public void renameTrip(String oldName, String newName) {
+        for (TravelList list : allLists) {
+            if (list.name.equals(oldName)) {
+                list.name = newName;
+                if (listAdapter != null) listAdapter.notifyDataSetChanged();
+                saveAllData();
+                syncAllDataToCloud();
+                invalidateAiContext();
+                break;
+            }
+        }
+    }
+
+    public void deleteTrip(String name) {
+        for (int i = 0; i < allLists.size(); i++) {
+            if (allLists.get(i).name.equals(name)) {
+                deleteTravelList(i);
+                invalidateAiContext();
+                break;
+            }
+        }
+    }
+
+    public void addPoint(double lat, double lng, String name) {
+        LatLng point = new LatLng(lat, lng);
+        SavedLocation loc = new SavedLocation(point);
+        loc.customName = name;
+        uniqueLocations.add(loc);
+        pathPoints.add(point);
+        refreshSavedPoints();
+        saveAllData();
+        syncAllDataToCloud();
+        invalidateAiContext();
+    }
+
+    public void buildRoute(List<LatLng> points) {
+        pathPoints.clear();
+        pathPoints.addAll(points);
+        uniqueLocations.clear();
+        for (LatLng p : points) {
+            SavedLocation loc = new SavedLocation(p);
+            uniqueLocations.add(loc);
+        }
+        currentActiveList.locations = new ArrayList<>(uniqueLocations);
+        currentActiveList.pathPoints = new ArrayList<>(pathPoints);
+        refreshSavedPoints();
+        saveAllData();
+        syncAllDataToCloud();
+        invalidateAiContext();
+    }
+    private String copyPhotoToPrivateStorage(Uri sourceUri) {
+        try {
+            // Папка для фото в приватном хранилище
+            File photoDir = new File(getFilesDir(), "photos");
+            if (!photoDir.exists()) photoDir.mkdirs();
+
+            // Генерируем уникальное имя
+            String fileName = System.currentTimeMillis() + ".jpg";
+            File destFile = new File(photoDir, fileName);
+
+            // Копируем содержимое
+            InputStream in = getContentResolver().openInputStream(sourceUri);
+            OutputStream out = new FileOutputStream(destFile);
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = in.read(buffer)) != -1) {
+                out.write(buffer, 0, len);
+            }
+            in.close();
+            out.close();
+
+            // Возвращаем абсолютный путь (file://...)
+            return destFile.getAbsolutePath();
+        } catch (Exception e) {
+            Log.e("MarkerPhoto", getString(R.string.text_auto_145), e);
+            return null;
+        }
+    }
+    public void showRenameDialog(int position, String oldName, @Nullable Runnable onRenamed) {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_rename, null);
+        EditText etName = dialogView.findViewById(R.id.etNewName);
+        etName.setText(oldName);
+        etName.setSelection(oldName.length());
+
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                .setView(dialogView)
+                .create();
+
+        // Кнопка Сохранить
+        dialogView.findViewById(R.id.btnSave).setOnClickListener(v -> {
+            String newName = etName.getText().toString().trim();
+            if (!newName.isEmpty()) {
+                allLists.get(position).name = newName;
+                if (listAdapter != null) listAdapter.notifyItemChanged(position);
+                saveAllData();
+                syncAllDataToCloud();
+                updateTravelCount();
+                if (onRenamed != null) onRenamed.run();
+            }
+            dialog.dismiss();
+        });
+
+        // Кнопка Отмена
+        dialogView.findViewById(R.id.btnCancel).setOnClickListener(v -> dialog.dismiss());
+
+        // Кнопка Удалить – показываем стильный диалог подтверждения
+        dialogView.findViewById(R.id.btnDelete).setOnClickListener(v -> {
+            dialog.dismiss();
+            showConfirmDeleteDialog(position, oldName);
+        });
+
+        dialog.show();
+
+        etName.requestFocus();
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.showSoftInput(etName, InputMethodManager.SHOW_IMPLICIT);
+    }
+    private void showConfirmDeleteDialog(int position, String listName) {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_confirm_delete, null);
+        TextView tvMessage = dialogView.findViewById(R.id.tvConfirmMessage);
+        tvMessage.setText(getString(R.string.text_auto_146) + listName + getString(R.string.text_auto_147));
+
+        AlertDialog confirmDialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                .setView(dialogView)
+                .create();
+
+        dialogView.findViewById(R.id.btnConfirmDelete).setOnClickListener(v -> {
+            confirmDialog.dismiss();
+            deleteTravelList(position);
+        });
+
+        dialogView.findViewById(R.id.btnConfirmCancel).setOnClickListener(v -> confirmDialog.dismiss());
+
+        confirmDialog.show();
+    }
+    private void deleteTravelList(int position) {
+        TravelList listToDelete = allLists.get(position);
+
+        // 1. Удаляем локальные фото, связанные с точками этого списка
+        deletePhotosFromList(listToDelete);
+
+        // 2. Удаляем список из памяти
+        allLists.remove(position);
+
+        // 3. Если удалённый список был активным, переключаемся на первый доступный
+        if (currentActiveList == listToDelete) {
+            if (!allLists.isEmpty()) {
+                currentActiveList = allLists.get(0);
+            } else {
+                // Если не осталось списков, создаём новый по умолчанию
+                TravelList defaultList = new TravelList(getString(R.string.text_auto_109));
+                allLists.add(defaultList);
+                currentActiveList = defaultList;
+            }
+            uniqueLocations = currentActiveList.locations;
+            pathPoints = currentActiveList.pathPoints;
+            invalidateAiContext();
+        }
+
+        // 4. Обновляем адаптер и карту
+        if (listAdapter != null) listAdapter.notifyDataSetChanged();
+        refreshSavedPoints();
+        updateTravelCount();
+        // 5. Сохраняем изменения локально и в облаке
+        saveAllData();
+        syncAllDataToCloud();
+
+        Toast.makeText(this, getString(R.string.text_auto_148), Toast.LENGTH_SHORT).show();
+    }
+    private void deletePhotosFromList(TravelList list) {
+        if (list == null || list.locations == null) return;
+        for (SavedLocation loc : list.locations) {
+            if (loc.photoPaths != null) {
+                for (String photoPath : loc.photoPaths) {
+                    if (photoPath != null && !photoPath.isEmpty()) {
+                        File file = new File(photoPath);
+                        if (file.exists()) {
+                            file.delete();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private void addSavedMarker(LatLng point) {
+        if (mapLibre == null) return;
+
+        // 1. Создаем временный объект для этой точки
+        SavedLocation tempLoc = new SavedLocation(point);
+        tempLoc.level = 1; // Устанавливаем уровень вручную
+
+        // 2. Теперь передаем ОБЪЕКТ в метод отрисовки
+        org.maplibre.android.annotations.Icon premiumIcon = createPremiumMarker(tempLoc);
+
+        mapLibre.addMarker(new org.maplibre.android.annotations.MarkerOptions()
+                .position(point)
+                .icon(premiumIcon));
+    }
+
+    private void searchLocation(String query) {
+        new Thread(() -> {
+            try {
+                // 1. Правильно кодируем запрос, чтобы пробелы не ломали URL
+                String encodedQuery = java.net.URLEncoder.encode(query, "UTF-8");
+                String urlString = "https://nominatim.openstreetmap.org/search?q=" + encodedQuery
+                        + "&format=json&polygon_geojson=1&limit=1&accept-language=ru,en";
+
+                URL url = new URL(urlString);
+                HttpURLConnection con = (HttpURLConnection) url.openConnection();
+
+                // 2. Обязательные заголовки, чтобы сервер нас не заблокировал
+                con.setRequestProperty("User-Agent", "OzTrip_App");
+                con.setRequestProperty("Accept-Language", "ru,en");
+
+                BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+                StringBuilder res = new StringBuilder();
+                String line;
+                while ((line = in.readLine()) != null) res.append(line);
+                in.close();
+
+                JSONArray results = new JSONArray(res.toString());
+
+                if (results.length() > 0) {
+                    JSONObject place = results.getJSONObject(0);
+                    double lat = place.getDouble("lat");
+                    double lon = place.getDouble("lon");
+                    String fullDisplayName = place.optString("display_name", "");
+                    String shortName = fullDisplayName.split(",")[0];
+                    String type = place.optString("type", "Point");
+                    JSONObject geojson = place.optJSONObject("geojson");
+
+                    runOnUiThread(() -> {
+                        isSearching = true;
+                        // Плавный полет к найденной цели
+                        mapLibre.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lat, lon), 15), 2500,
+                                new org.maplibre.android.maps.MapLibreMap.CancelableCallback() { // ИСПОЛЬЗУЙ ЭТОТ ПУТЬ
+                                    @Override
+                                    public void onFinish() {
+                                        // Даем пользователю 2 секунды осмотреться, прежде чем магнит снова оживет
+                                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                                            isSearching = false;
+                                        }, 2000);
+                                    }
+
+                                    @Override
+                                    public void onCancel() {
+                                        isSearching = false;
+                                    }
+                                });
+
+                        if (geojson != null) drawBoundary(geojson);
+
+                        // Определяем тип места для карточки
+                        String displayType = getString(R.string.text_auto_149);
+
+                        if (type != null && !type.isEmpty()) {
+                            String t = type.toLowerCase();
+
+                            // --- ЛОГИКА ДЛЯ ПОДЗАГОЛОВКА (displayType) ---
+                            if (t.matches(".*(city|town|administrative|suburb).*")) {
+                                displayType = getString(R.string.text_auto_150);
+                            } else if (t.equals("village") || t.equals("hamlet")) {
+                                displayType = getString(R.string.text_auto_151);
+                            } else if (t.contains("park") || t.contains("forest") || t.contains("wood") || t.equals("garden")) {
+                                displayType = getString(R.string.text_auto_152);
+                            } else if (t.matches(".*(peak|mountain|volcano|hill).*")) {
+                                displayType = getString(R.string.text_auto_153);
+                            } else if (t.matches(".*(water|river|lake|reservoir|canal).*")) {
+                                displayType = getString(R.string.text_auto_154);
+                            } else if (t.matches(".*(monastery|church|castle|fortress|ruins).*")) {
+                                displayType = getString(R.string.text_auto_155);
+                            }
+
+
+
+                        }
+                        // Внутри searchLocation -> runOnUiThread
+                        String[] parts = fullDisplayName.split(",");
+                        String countryCity = "";
+
+                        if (parts.length >= 2) {
+                            // Берем последние два элемента (обычно это Город и Страна)
+                            String last1 = parts[parts.length - 1].trim(); // Страна
+                            String last2 = parts[parts.length - 2].trim(); // Город / Область
+                            countryCity = last2 + ", " + last1;
+                        } else {
+                            countryCity = fullDisplayName;
+                        }
+
+                        showPremiumCard(shortName, displayType, countryCity.toUpperCase(), lat, lon);
+
+                    });
+                } else {
+                    runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_156), Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_157), Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+
+    }
+
+    private void showPremiumCard(String name, String subtitle, String type, double lat, double lon) {
+        TextView title = findViewById(R.id.infoTitle);
+        TextView desc = findViewById(R.id.infoDescription);
+        ImageView img = findViewById(R.id.infoImage);
+        TextView txtTemp = findViewById(R.id.txtTemp);
+        TextView txtHeight = findViewById(R.id.txtHeight);
+        TextView txtFlora = findViewById(R.id.txtFlora);
+        // ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ КНОПКУ ПЕРЕД ОТКРЫТИЕМ КАРТОЧКИ
+        View saveBtn = findViewById(R.id.btnSaveLocation);
+        if (saveBtn != null) {
+            saveBtn.setVisibility(View.VISIBLE);
+            saveBtn.setAlpha(1f);
+        }
+
+
+        if (sheetBehavior != null) {
+            // Принудительно сообщаем BottomSheetBehaviour актуальную высоту
+            sheetBehavior.setPeekHeight(450);
+            sheetBehavior.setPeekHeight(450);
+
+            sheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+            infoCard.requestLayout();  // гарантируем пересчёт лэйаута
+            // ВОТ ЭТА СТРОЧКА:
+            infoCard.bringToFront();
+
+            boolean isDark = (getResources().getConfiguration().uiMode
+                    & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+
+            if (infoCard instanceof MaterialCardView) {
+                ((MaterialCardView) infoCard).setCardBackgroundColor(
+                        isDark ? Color.parseColor("#1E1E1E") : Color.parseColor("#E6212121"));
+            }
+            if (title != null) title.setTextColor(isDark ? Color.WHITE : Color.parseColor("#FFFFFF"));
+            if (desc != null) desc.setTextColor(isDark ? Color.parseColor("#B0B0B0") : Color.parseColor("#CCFFFFFF"));
+// txtFlora, txtTemp, txtHeight можно оставить как есть
+        }
+
+
+
+        // 2. Заполняем тексты
+        if (title != null) title.setText(name);
+        if (desc != null) desc.setText("📍 " + subtitle);
+        if (txtFlora != null) {
+            txtFlora.setText(type);
+            txtFlora.setSelected(true); // Это запустит бегущую строку (marquee), если настроено в XML
+        };
+
+
+        // Высота (рандом для красоты или можно взять из API)
+        if (txtHeight != null) txtHeight.setText("--m");
+        // Внутри метода, где мы фиксируем локацию:
+        this.homeLatLng = new LatLng(lat, lon);
+        // 3. Спутниковый снимок (Яндекс.Карты)
+        String hdUrl = "https://static-maps.yandex.ru/1.x/?ll=" + lon + "," + lat + "&z=16&l=sat&size=600,400";
+        Glide.with(this).load(hdUrl).centerCrop().into(img);
+
+        // 4. Погода
+        if (txtTemp != null) fetchWeatherForCard(lat, lon, txtTemp);
+    }
+
+    // Добавь этот метод вниз класса
+    private void fetchWeatherForCard(double lat, double lon, TextView tempView) {
+
+        String url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&current_weather=true";
+
+
+
+        new Thread(() -> {
+
+            try {
+
+                java.net.URL obj = new java.net.URL(url);
+
+                java.util.Scanner s = new java.util.Scanner(obj.openStream()).useDelimiter("\\A");
+
+                String result = s.hasNext() ? s.next() : "";
+
+
+
+                JSONObject json = new JSONObject(result);
+
+                double temp = json.getJSONObject("current_weather").getDouble("temperature");
+
+
+
+                runOnUiThread(() -> {
+
+                    tempView.setText((int)temp + "°C");
+
+
+
+// Получаем реальную высоту из JSON (Open-Meteo это умеет)
+
+                    double elevation = json.optDouble("elevation", 0);
+
+                    TextView heightView = findViewById(R.id.txtHeight);
+
+                    if (heightView != null) heightView.setText((int)elevation + "m");});
+
+            } catch (Exception e) {
+
+                runOnUiThread(() -> tempView.setText("??°C"));
+
+            }
+
+        }).start();
+
+    }
+
+
+
+    private void refreshSavedPoints() {
+        if (mapLibre == null) return;
+        mapLibre.clear();
+
+        // Сбрасываем кэш иконок перед перерисовкой
+        for (SavedLocation loc : uniqueLocations) {
+            loc.cachedIcon = null;
+        }
+
+        for (SavedLocation loc : uniqueLocations) {
+            mapLibre.addMarker(new org.maplibre.android.annotations.MarkerOptions()
+                    .position(loc.latLng)
+                    .icon(createPremiumMarker(loc)));
+        }
+
+        if (pathPoints.size() > 1) {
+            mapLibre.addPolyline(new org.maplibre.android.annotations.PolylineOptions()
+                    .addAll(pathPoints)
+                    .color(android.graphics.Color.parseColor("#A62C2C2C"))
+                    .width(dpToPx(2)));
+        }
+    }
+
+    private void drawBoundary(JSONObject geojson) {
+
+        mapLibre.getStyle(style -> {
+
+// 1. ПРЯЧЕМ УКАЗАТЕЛЬ (Точку), так как теперь смотрим на район
+
+            org.maplibre.android.style.layers.Layer marker = style.getLayer("marker-layer");
+
+            org.maplibre.android.style.layers.Layer shadow = style.getLayer("marker-shadow");
+
+            if (marker != null) marker.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
+
+            if (shadow != null) shadow.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
+
+
+
+// 2. РИСУЕМ ГРАНИЦЫ
+
+            if (style.getSource("boundary-source") != null) {
+
+                style.removeLayer("boundary-layer");
+
+                style.removeLayer("outline-layer");
+
+                style.removeSource("boundary-source");
+
+            }
+
+            style.addSource(new org.maplibre.android.style.sources.GeoJsonSource("boundary-source", geojson.toString()));
+
+            style.addLayer(new org.maplibre.android.style.layers.FillLayer("boundary-layer", "boundary-source")
+
+                    .withProperties(org.maplibre.android.style.layers.PropertyFactory.fillColor(Color.parseColor("#33FF9800"))));
+
+            style.addLayer(new org.maplibre.android.style.layers.LineLayer("outline-layer", "boundary-source")
+
+                    .withProperties(org.maplibre.android.style.layers.PropertyFactory.lineColor(Color.parseColor("#FF9800")),
+
+                            org.maplibre.android.style.layers.PropertyFactory.lineWidth(2f)));
+
+        });
+
+    }
+
+
+
+// Этот метод сработает, когда ты пишешь dpToPx(52)
+
+    private int dpToPx(int dp) {
+
+        return (int) (dp * getResources().getDisplayMetrics().density);
+
+    }
+
+
+
+// Этот метод сработает, когда ты пишешь dpToPx(1.5f)
+
+    private float dpToPx(float dp) {
+
+        return dp * getResources().getDisplayMetrics().density;
+
+    }
+
+
+
+
+    @SuppressWarnings({"MissingPermission"})
+    private void enableLocation(Style style) {
+        // Проверяем, есть ли разрешение
+        if (androidx.core.app.ActivityCompat.checkSelfPermission(this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+
+            // Запрашиваем разрешение у пользователя
+            androidx.core.app.ActivityCompat.requestPermissions(this,
+                    new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION},
+                    1001);
+            return; // Выходим, не включая геолокацию
+        }
+
+        LocationComponent locationComponent = mapLibre.getLocationComponent();
+        locationComponent.activateLocationComponent(
+                LocationComponentActivationOptions.builder(this, style).build());
+        locationComponent.setLocationComponentEnabled(true);
+        locationComponent.setRenderMode(org.maplibre.android.location.modes.RenderMode.COMPASS);
+    }
+
+    private void saveAllData() {
+        try {
+            SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+
+            // Важно: Мы сохраняем ВЕСЬ список allLists, в котором лежат все поездки
+            Gson gson = new GsonBuilder()
+                    .registerTypeAdapter(LatLng.class, new LatLngAdapter())
+                    .create();
+
+            String json = gson.toJson(allLists);
+            String key = getStorageKey();
+            editor.putString(key, json);
+            editor.apply();
+
+            android.util.Log.d("OzTrip", getString(R.string.text_auto_158) + allLists.size());
+        } catch (Exception e) {
+            android.util.Log.e("OzTrip", getString(R.string.text_auto_111) + e.getMessage());
+        }
+    }
+
+    private void loadAllData() {
+        SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+        String key = getStorageKey();
+        String json = prefs.getString(key, null);
+
+        Gson gson = new GsonBuilder()
+                .registerTypeAdapter(LatLng.class, new LatLngAdapter())
+                .create();
+
+        if (json != null && !json.isEmpty()) {
+            Type type = new TypeToken<ArrayList<TravelList>>(){}.getType();
+            ArrayList<TravelList> loadedData = gson.fromJson(json, type);
+            if (loadedData != null && !loadedData.isEmpty()) {
+                allLists.clear();
+                allLists.addAll(loadedData);
+                removeDuplicateLists();
+                Collections.sort(allLists, (a, b) -> a.name.compareToIgnoreCase(b.name));
+            } else {
+                allLists.clear();
+                allLists.add(new TravelList(getString(R.string.text_auto_159)));
+            }
+        }
+
+        // Если после загрузки всё равно пусто (первый запуск)
+        if (allLists == null || allLists.isEmpty()) {
+            allLists = new ArrayList<>();
+            allLists.add(new TravelList(getString(R.string.text_auto_159)));
+        }
+
+        // ВСЕГДА привязываем текущую активную поездку к первой в списке
+        currentActiveList = allLists.get(0);
+
+        // ПРИВЯЗКА РАБОЧИХ СПИСКОВ (Чтобы всё, что ты добавляешь, шло внутрь TravelList)
+        if (currentActiveList.pathPoints == null) currentActiveList.pathPoints = new ArrayList<>();
+        if (currentActiveList.locations == null) currentActiveList.locations = new ArrayList<>();
+
+        pathPoints = currentActiveList.pathPoints;
+        uniqueLocations = currentActiveList.locations;
+    }
+
+
+
+    @Override protected void onStart() { super.onStart(); if (mapView != null) mapView.onStart(); }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        String lang = getSharedPreferences("OzTripPrefs", MODE_PRIVATE).getString("language", "ru");
+        if (!lang.equals(currentLanguage)) {
+            // Пересоздаём, если язык изменился
+            recreate();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (mapView != null) mapView.onPause();
+        saveAllData(); // Сохраняем всё перед выходом
+    }
+
+
+    @Override protected void onStop() { super.onStop(); if (mapView != null) mapView.onStop(); }
+
+    @Override protected void onSaveInstanceState(@NonNull Bundle outState) { super.onSaveInstanceState(outState); if (mapView != null) mapView.onSaveInstanceState(outState); }
+
+    @Override public void onLowMemory() { super.onLowMemory(); if (mapView != null) mapView.onLowMemory(); }
+
+    @Override protected void onDestroy() { super.onDestroy(); if (mapView != null) mapView.onDestroy(); }
+
+}
+
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\OzTripApplication.java ---
+
+package com.example.oztrip;
+
+import android.app.Application;
+import android.content.SharedPreferences;
+import androidx.appcompat.app.AppCompatDelegate;
+
+public class OzTripApplication extends Application {
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // Читаем сохранённую настройку
+        SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+        boolean isDark = prefs.getBoolean("dark_theme", false); // по умолчанию false (светлая)
+
+        // Принудительно устанавливаем тему для всего приложения
+        AppCompatDelegate.setDefaultNightMode(
+                isDark ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO
+        );
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\ProfileSetupActivity.java ---
+
+package com.example.oztrip;
+
+import android.content.Intent;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.textfield.TextInputLayout;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+public class ProfileSetupActivity extends BaseActivity  {
+    private MaterialButton btnSave;
+    private EditText etUsername, etName;
+    // Убираем TextInputLayout, так как их больше нет в XML
+    private ChipGroup cgSuggestions;
+    private CardView llSuggestions;
+    private FirebaseFirestore db;
+    private ProgressBar pbLoading;
+    private TextView tvTitle;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_profile_setup);
+
+        db = FirebaseFirestore.getInstance();
+
+        // 1. Инициализация (ОБЯЗАТЕЛЬНО ВСЕ, ЧТО ЕСТЬ В XML)
+        tvTitle = findViewById(R.id.tvTitle);
+        etUsername = findViewById(R.id.etUsername);
+        etName = findViewById(R.id.etName);
+        llSuggestions = findViewById(R.id.llSuggestions);
+        cgSuggestions = findViewById(R.id.cgSuggestions);
+        btnSave = findViewById(R.id.btnSave);
+        pbLoading = findViewById(R.id.pbLoading); // Добавил это!
+
+        // Анимация заголовка
+        tvTitle.setAlpha(0f);
+        tvTitle.setTranslationY(20f);
+        tvTitle.animate().alpha(1f).translationY(0f).setDuration(800).start();
+
+        btnSave.setOnClickListener(v -> saveProfile());
+
+        etUsername.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                // tilUsername.setError(null); <- УДАЛИ ЭТУ СТРОКУ, она вызывала вылет
+                llSuggestions.setVisibility(View.GONE);
+            }
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void afterTextChanged(Editable s) {}
+        });
+
+        etName.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                // tilName.setError(null); <- УДАЛИ ЭТУ СТРОКУ
+            }
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void afterTextChanged(Editable s) {}
+        });
+        // В onCreate добавь:
+        etUsername.setFilters(new android.text.InputFilter[] {
+                (source, start, end, dest, dstart, dend) -> {
+                    for (int i = start; i < end; i++) {
+                        if (!Character.isLetterOrDigit(source.charAt(i)) && source.charAt(i) != '_') {
+                            return "";
+                        }
+                    }
+                    return null;
+                }
+        });
+    }
+
+    private void saveProfile() {
+        String username = etUsername.getText().toString().trim();
+        String name = etName.getText().toString().trim();
+        // Получаем почту, которую прислал RegisterActivity
+        String email = getIntent().getStringExtra("user_email");
+
+        if (username.length() < 3 || name.isEmpty()) {
+            Toast.makeText(this, getString(R.string.text_auto_86), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        db.collection("users").whereEqualTo("username", username).get()
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful() && task.getResult().isEmpty()) {
+                        // НИК СВОБОДЕН -> Идем в редактор аватара
+                        Intent intent = new Intent(this, AvatarEditorActivity.class);
+                        intent.putExtra("user_name", name);
+                        intent.putExtra("user_username", username);
+                        intent.putExtra("user_email", email); // НЕ ТЕРЯЕМ ПОЧТУ!
+                        startActivity(intent);
+                    } else {
+                        Toast.makeText(this, getString(R.string.text_auto_160), Toast.LENGTH_SHORT).show();
+                        suggestAlternatives(username);
+                    }
+                });
+    }
+
+    // Метод suggestAlternatives и generateAlternative оставляем как были
+
+
+    private void suggestAlternatives(String baseUsername) {
+        // Тряска (нужен shake.xml в res/anim)
+        llSuggestions.startAnimation(AnimationUtils.loadAnimation(this, R.anim.shake));
+
+        cgSuggestions.removeAllViews();
+        llSuggestions.setVisibility(View.VISIBLE);
+        llSuggestions.setAlpha(0f);
+        llSuggestions.animate().alpha(1f).setDuration(300).start();
+
+        for (int i = 0; i < 3; i++) {
+            generateAlternative(baseUsername);
+        }
+    }
+
+    private void generateAlternative(String base) {
+        String alternative = base + (new java.util.Random().nextInt(899) + 100);
+        db.collection("users").whereEqualTo("username", alternative).get()
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful() && task.getResult().isEmpty()) {
+                        com.google.android.material.chip.Chip chip = new com.google.android.material.chip.Chip(this);
+                        chip.setText(alternative);
+                        chip.setOnClickListener(v -> {
+                            etUsername.setText(alternative);
+                            llSuggestions.setVisibility(View.GONE);
+                        });
+                        cgSuggestions.addView(chip);
+                    }
+                });
+    }
+
+}
+
+
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\RegisterActivity.java ---
+
+package com.example.oztrip;
+
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.button.MaterialButton;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthUserCollisionException;
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+
+public class RegisterActivity extends BaseActivity  {
+
+    private FirebaseAuth mAuth;
+    private EditText etEmail, etPassword;
+    private TextView tvError;
+    private ProgressBar pbLoading;
+    private MaterialButton btnRegister;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_register);
+
+        MaterialButton btnGuest = findViewById(R.id.btnGuestRegister);
+        btnGuest.setOnClickListener(v -> enterGuestMode());
+        // Инициализация Firebase
+        mAuth = FirebaseAuth.getInstance();
+
+        // Инициализация View
+        tvError = findViewById(R.id.tvError);
+        etEmail = findViewById(R.id.etEmail);
+        etPassword = findViewById(R.id.etPassword);
+
+        btnRegister = findViewById(R.id.btnRegister);
+        pbLoading = findViewById(R.id.pbLoading);
+        TextView tvLoginLink = findViewById(R.id.tvLoginLink);
+
+        // Очистка ошибок при вводе
+        setupTextWatchers();
+
+        // Кнопка регистрации
+        btnRegister.setOnClickListener(v -> performRegistration());
+        ImageButton btnToggle = findViewById(R.id.btnTogglePasswordRegister);
+        final boolean[] isPasswordVisible = {false};
+
+        btnToggle.setOnClickListener(v -> {
+            if (isPasswordVisible[0]) {
+                // Скрываем пароль
+                etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                btnToggle.setImageResource(R.drawable.ic_eye_off);
+            } else {
+                // Показываем пароль
+                etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+                btnToggle.setImageResource(R.drawable.ic_eye);
+            }
+            isPasswordVisible[0] = !isPasswordVisible[0];
+
+            // Чтобы курсор не прыгал в начало строки
+            etPassword.setSelection(etPassword.getText().length());
+        });
+        // Кнопка перехода на Login (если создашь такую Activity)
+        tvLoginLink.setOnClickListener(v -> {
+            startActivity(new Intent(this, LoginActivity.class));
+        });
+
+        mAuth.addAuthStateListener(auth -> {
+            FirebaseUser user = auth.getCurrentUser();
+            if (user != null) {
+                // Пользователь авторизован – проверяем флаг завершения регистрации
+                SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+                boolean complete = prefs.getBoolean("registration_complete", false);
+
+                Intent intent;
+                if (complete) {
+                    intent = new Intent(RegisterActivity.this, MainActivity.class);
+                } else {
+                    intent = new Intent(RegisterActivity.this, ProfileSetupActivity.class);
+                    intent.putExtra("user_email", user.getEmail());
+                }
+                startActivity(intent);
+                finish();
+            }
+        });
+    }
+
+    private void enterGuestMode() {
+        getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                .edit()
+                .putBoolean("guest_mode", true)
+                .remove("guest_travels")
+                .apply();
+
+        Intent intent = new Intent(RegisterActivity.this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
+
+    // Вспомогательный метод для запуска проверки в фоне
+    private void performRegistration() {
+        String email = etEmail.getText().toString().trim();
+        String password = etPassword.getText().toString().trim();
+
+        if (email.isEmpty()) {
+            showError(getString(R.string.text_auto_161));
+            return;
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            showError("Введите корректный email");
+            return;
+        }
+        if (password.length() < 6) {
+            showError(getString(R.string.text_auto_162));
+            return;
+        }
+
+        pbLoading.setVisibility(View.VISIBLE);
+        btnRegister.setEnabled(false);
+
+        // Проверка реальности почты (без API-ключей!)
+        AsyncTask.execute(() -> {
+            String result = EmailValidator.verify(email);
+            runOnUiThread(() -> {
+                pbLoading.setVisibility(View.GONE);
+                btnRegister.setEnabled(true);
+                if ("valid".equals(result)) {
+                    createFirebaseAccount(email, password);
+                } else if ("invalid".equals(result)) {
+                    showError("Такой email не существует. Проверьте адрес.");
+                } else {
+                    Toast.makeText(RegisterActivity.this,
+                            "Не удалось проверить почту. Продолжаем без проверки.",
+                            Toast.LENGTH_LONG).show();
+                    createFirebaseAccount(email, password);
+                }
+            });
+        });
+    }
+
+    private void createFirebaseAccount(String email, String password) {
+        mAuth.createUserWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this, task -> {
+                    pbLoading.setVisibility(View.GONE);
+                    btnRegister.setEnabled(true);
+
+                    if (task.isSuccessful()) {
+                        Intent intent = new Intent(RegisterActivity.this, ProfileSetupActivity.class);
+                        intent.putExtra("user_email", email);
+                        startActivity(intent);
+                        finish();
+                    } else {
+                        handleFirebaseError(task.getException());
+                    }
+                });
+    }
+
+
+    private void waitForEmailVerification(FirebaseUser user) {
+        pbLoading.setVisibility(View.VISIBLE);
+        btnRegister.setEnabled(false);
+
+        // Каждые 2 секунды проверяем, подтверждён ли email
+        new android.os.Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                user.reload()
+                        .addOnCompleteListener(task -> {
+                            if (task.isSuccessful()) {
+                                if (user.isEmailVerified()) {
+                                    // Подтверждено – можно продолжать
+                                    pbLoading.setVisibility(View.GONE);
+                                    btnRegister.setEnabled(true);
+                                    Toast.makeText(RegisterActivity.this,
+                                            "Email подтверждён!", Toast.LENGTH_SHORT).show();
+                                    // Переходим в ProfileSetupActivity
+                                    Intent intent = new Intent(RegisterActivity.this, ProfileSetupActivity.class);
+                                    intent.putExtra("user_email", user.getEmail());
+                                    startActivity(intent);
+                                    finish();
+                                    return;
+                                }
+                            }
+                            // Ещё не подтверждено – повторяем проверку
+                            if (!isDestroyed()) {
+                                waitForEmailVerification(user);
+                            }
+                        });
+            }
+        }, 2000);
+    }
+
+    private void handleFirebaseError(Exception e) {
+        tvError.setVisibility(View.VISIBLE);
+        if (e instanceof FirebaseAuthUserCollisionException) {
+            tvError.setText(getString(R.string.text_auto_163));
+        } else if (e instanceof FirebaseAuthWeakPasswordException) {
+            tvError.setText(getString(R.string.text_auto_164));
+        } else {
+            tvError.setText(getString(R.string.text_auto_165));
+        }
+    }
+
+    private void showError(String msg) {
+        tvError.setText(msg);
+        tvError.setVisibility(View.VISIBLE);
+    }
+
+    private void setupTextWatchers() {
+        TextWatcher tw = new TextWatcher() {
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                tvError.setVisibility(View.GONE);
+            }
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void afterTextChanged(Editable s) {}
+        };
+        etEmail.addTextChangedListener(tw);
+        etPassword.addTextChangedListener(tw);
+    }
+
+
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\SavedLocation.java ---
+
+package com.example.oztrip;
+
+import org.maplibre.android.geometry.LatLng;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+// Уникальное место сохранения
+public class SavedLocation {
+    public transient org.maplibre.android.annotations.Icon cachedIcon = null;
+    public float rating = 50f; // Оценка по умолчанию (середина)
+    public LatLng latLng;
+    public int level;
+    public String note = ""; // Для текста
+    public String customName = "";
+    public String date = ""; // По умолчанию пусто
+    public java.util.List<String> photoPaths = new java.util.ArrayList<>(); // Для картинок
+
+    public SavedLocation(LatLng latLng) {
+        this.latLng = latLng;
+        this.level = 1;
+    }
+
+    // В классе SavedLocation
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("lat", latLng.getLatitude());
+        map.put("lng", latLng.getLongitude());
+        map.put("level", level);
+        map.put("note", note);
+        map.put("customName", customName);
+        map.put("date", date);
+        map.put("rating", rating);
+        map.put("photoPaths", photoPaths);
+        return map;
+    }
+
+    public static SavedLocation fromMap(Map<String, Object> map, String id) {
+        double lat = (double) map.get("lat");
+        double lng = (double) map.get("lng");
+        LatLng latLng = new LatLng(lat, lng);
+        SavedLocation loc = new SavedLocation(latLng);
+        loc.level = ((Long) map.get("level")).intValue();
+        loc.note = (String) map.get("note");
+        loc.customName = (String) map.get("customName");
+        loc.date = (String) map.get("date");
+        loc.rating = ((Double) map.get("rating")).floatValue();
+        loc.photoPaths = (List<String>) map.get("photoPaths");
+        return loc;
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\SettingsActivity.java ---
+
+package com.example.oztrip;
+
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+
+import com.bumptech.glide.Glide;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.switchmaterial.SwitchMaterial;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.EmailAuthProvider;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.io.File;
+import java.util.Locale;
+
+public class SettingsActivity extends BaseActivity  {
+
+    private TextView tvWelcome, tvUserNick, tvInitials;
+    private ImageView ivAvatar;
+    private MaterialCardView cardAvatarContainer;
+    private MaterialButton btnEditProfile, btnLogout;
+    private FirebaseFirestore db;
+    private String uid;
+    private boolean isGuest;
+
+    private SwitchMaterial switchDarkTheme;
+    private TextView tvCurrentUnit;
+    private TextView tvCurrentLanguage;
+    private SharedPreferences prefs;
+
+    private TextView tvAboutMePreview;
+    private String aboutMeText = "";
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // 1. Применяем локаль ДО загрузки макета
+        SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+        this.prefs = prefs;
+        String lang = prefs.getString("language", "ru");
+        setLocale(lang);
+
+        // 2. Теперь загружаем макет
+        setContentView(R.layout.activity_settings);
+
+
+        // Определяем режим гостя
+        isGuest = prefs.getBoolean("guest_mode", false);
+
+        // Инициализация Firebase только если авторизованы
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() != null && !isGuest) {
+            uid = auth.getCurrentUser().getUid();
+            db = FirebaseFirestore.getInstance();
+        } else {
+            uid = null;
+        }
+
+        // Привязка View
+        tvWelcome = findViewById(R.id.tvWelcome);
+        tvUserNick = findViewById(R.id.tvUserNick);
+        tvInitials = findViewById(R.id.tvInitials);
+        ivAvatar = findViewById(R.id.ivAvatar);
+        cardAvatarContainer = findViewById(R.id.cardAvatarContainer);
+        btnEditProfile = findViewById(R.id.btnEditProfile);
+        btnLogout = findViewById(R.id.btnLogoutSettings);
+
+        switchDarkTheme = findViewById(R.id.switchDarkTheme);
+        tvCurrentLanguage = findViewById(R.id.tvCurrentLanguage);
+
+        // Настройка интерфейса для гостя
+        if (uid == null) {
+            btnEditProfile.setVisibility(View.GONE);
+            btnLogout.setText(getString(R.string.text_auto_166));
+            tvWelcome.setText(getString(R.string.text_auto_167));
+            tvUserNick.setText("@guest");
+            tvInitials.setVisibility(View.VISIBLE);
+            tvInitials.setText("G");
+            cardAvatarContainer.setCardBackgroundColor(Color.LTGRAY);
+            ivAvatar.setVisibility(View.GONE);
+        } else {
+            btnLogout.setText(getString(R.string.text_auto_168));
+        }
+
+        tvAboutMePreview = findViewById(R.id.tvAboutMePreview);
+        aboutMeText = prefs.getString("about_me", "");
+        updateAboutMePreview();
+
+        // Кнопка Изменить профиль
+        if (btnEditProfile.getVisibility() == View.VISIBLE) {
+            btnEditProfile.setOnClickListener(v -> showLuxuryAuthDialog());
+        }
+
+        // Кнопка выхода
+        btnLogout.setOnClickListener(v -> {
+            if (isGuest) {
+                prefs.edit()
+                        .remove("guest_mode")
+                        .remove("guest_travels")
+                        .apply();
+            } else {
+                FirebaseAuth.getInstance().signOut();
+            }
+            Intent intent = new Intent(SettingsActivity.this, RegisterActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            finish();
+        });
+
+        findViewById(R.id.itemDeleteData).setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.text_auto_187)
+                    .setMessage(R.string.text_auto_188)
+                    .setPositiveButton(R.string.text_auto_189, (dialog, which) -> {
+                        // Открываем диалог подтверждения паролем
+                        showDeleteAccountDialog();
+                    })
+                    .setNegativeButton(R.string.text_auto_190, null)
+                    .show();
+        });
+
+        findViewById(R.id.itemAboutMe).setOnClickListener(v -> {
+            startActivity(new Intent(SettingsActivity.this, AboutMeActivity.class));
+        });
+        findViewById(R.id.itemContact).setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_SENDTO);
+            intent.setData(Uri.parse("mailto:minasyanyuri910@gmail.com"));
+            intent.putExtra(Intent.EXTRA_SUBJECT, "OzTrip feedback");
+            startActivity(Intent.createChooser(intent, "Написать"));
+        });
+        // Кнопка Назад
+        findViewById(R.id.btnBack).setOnClickListener(v -> finish());
+
+        // === НОВЫЕ НАСТРОЙКИ ===
+
+        // 1. Тёмная тема
+        boolean isDark = prefs.getBoolean("dark_theme", false);
+        switchDarkTheme.setChecked(isDark);
+        applyTheme();
+        switchDarkTheme.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("dark_theme", isChecked).apply();
+            AppCompatDelegate.setDefaultNightMode(
+                    isChecked ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO
+            );
+        });
+
+
+
+        // Внутри SettingsActivity, в методе onCreate, замените блок getString(R.string.text_auto_173) на этот:
+
+// 3. Язык
+        String currentLang = prefs.getString("language", "ru");
+        String[] langCodes = {"ru", "en", "hy"};
+        String[] langNames = {getString(R.string.text_86), getString(R.string.text_87), getString(R.string.text_88)};
+        int langIndex = lang.equals("ru") ? 0 : lang.equals("en") ? 1 : 2;
+        if (tvCurrentLanguage != null) tvCurrentLanguage.setText(langNames[langIndex]);
+// и для всех findViewById, которые могут отсутствовать
+
+        findViewById(R.id.itemLanguage).setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.text_auto_174))
+                    .setSingleChoiceItems(langNames, langIndex, (dialog, which) -> {
+                        String selected = langCodes[which];
+                        prefs.edit().putString("language", selected).apply();
+                        // Обновляем метку мгновенно, не дожидаясь recreate
+                        if (tvCurrentLanguage != null) tvCurrentLanguage.setText(langNames[which]);
+                        setLocale(selected);
+                        dialog.dismiss();
+                        recreate();   // пересоздаём активность с новым языком
+                    })
+                    .show();
+        });
+
+// Для единиц измерения также используем строки ресурсов (опционально):
+// getString(R.string.text_auto_171) и getString(R.string.text_auto_170) лучше заменить на ресурсы text_89, text_90, но сейчас не критично.
+
+        // 5. О приложении
+// 5. О приложении
+        findViewById(R.id.itemAbout).setOnClickListener(v -> {
+            View dialogView = getLayoutInflater().inflate(R.layout.dialog_about, null);
+            AlertDialog dialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                    .setView(dialogView)
+                    .create();
+
+            dialogView.findViewById(R.id.btnOkAbout).setOnClickListener(btn -> dialog.dismiss());
+
+            dialog.show();
+        });
+    }
+
+    private void updateAboutMePreview() {
+        if (tvAboutMePreview != null) {
+            if (aboutMeText.isEmpty()) {
+                tvAboutMePreview.setText(getString(R.string.text_auto_191));
+            } else {
+                tvAboutMePreview.setText(aboutMeText.length() > 30 ? aboutMeText.substring(0, 30) + "..." : aboutMeText);
+            }
+        }
+    }
+    private void showDeleteAccountDialog() {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_confirm_auth, null);
+        EditText etPass = dialogView.findViewById(R.id.etConfirmPass);
+        MaterialButton btnConfirm = dialogView.findViewById(R.id.btnConfirmAuth);
+
+        // Меняем заголовки на «Удаление аккаунта»
+        TextView tvTitle = dialogView.findViewById(R.id.tvDialogTitle);
+        if (tvTitle != null) {
+            tvTitle.setText("Удаление аккаунта");
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                .setView(dialogView)
+                .create();
+        dialog.show();
+
+        btnConfirm.setOnClickListener(btn -> {
+            String password = etPass.getText().toString().trim();
+            if (password.isEmpty()) {
+                etPass.setError("Введите пароль");
+                return;
+            }
+
+            btnConfirm.setEnabled(false);
+
+            // 1. Повторно аутентифицируем пользователя
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            if (user == null || user.getEmail() == null) {
+                Toast.makeText(this, "Ошибка авторизации", Toast.LENGTH_SHORT).show();
+                btnConfirm.setEnabled(true);
+                return;
+            }
+
+            AuthCredential credential = EmailAuthProvider.getCredential(user.getEmail(), password);
+            user.reauthenticate(credential)
+                    .addOnSuccessListener(aVoid -> {
+                        // 2. Удаляем все данные из Firestore
+                        if (uid != null) {
+                            // Удаляем профиль
+                            db.collection("users").document(uid).delete();
+
+                            // Удаляем все поездки
+                            db.collection("travel_lists")
+                                    .whereEqualTo("userId", uid)
+                                    .get()
+                                    .addOnSuccessListener(querySnapshot -> {
+                                        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                                            doc.getReference().delete();
+                                        }
+                                    });
+                        }
+
+                        // 3. Удаляем локальные фото
+                        deleteAllPhotos();
+
+                        // 4. Удаляем аккаунт Firebase Auth
+                        user.delete()
+                                .addOnSuccessListener(unused -> {
+                                    // 5. Полностью очищаем SharedPreferences
+                                    prefs.edit().clear().apply();
+                                    deleteCache();
+
+                                    Toast.makeText(this, "Аккаунт удалён", Toast.LENGTH_SHORT).show();
+                                    dialog.dismiss();
+
+                                    // Возвращаемся на экран регистрации
+                                    Intent intent = new Intent(SettingsActivity.this, RegisterActivity.class);
+                                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                                    startActivity(intent);
+                                    finish();
+                                })
+                                .addOnFailureListener(e -> {
+                                    btnConfirm.setEnabled(true);
+                                    Toast.makeText(this, "Ошибка удаления аккаунта: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                });
+                    })
+                    .addOnFailureListener(e -> {
+                        btnConfirm.setEnabled(true);
+                        etPass.setError("Неверный пароль");
+                    });
+        });
+    }
+
+    private void deleteAllPhotos() {
+        File photoDir = new File(getFilesDir(), "photos");
+        if (photoDir.exists() && photoDir.isDirectory()) {
+            File[] files = photoDir.listFiles();
+            if (files != null) {
+                for (File child : files) {
+                    child.delete();
+                }
+            }
+        }
+    }
+    // Установка новой локали
+    private void setLocale(String lang) {
+        Locale locale = new Locale(lang);
+        Locale.setDefault(locale);
+        Resources res = getResources();
+        Configuration config = res.getConfiguration();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            config.setLocale(locale);
+        } else {
+            config.locale = locale;
+        }
+        res.updateConfiguration(config, res.getDisplayMetrics());
+    }
+
+    private void restartApp() {
+        recreate();   // пересоздаст только SettingsActivity с новым языком
+    }
+
+
+
+    private void applyTheme() {
+        boolean isDark = prefs.getBoolean("dark_theme", false);
+        View root = findViewById(android.R.id.content);
+        if (root != null) {
+            root.setBackgroundColor(isDark ? Color.parseColor("#0A0A0F") : Color.parseColor("#FFFDE7"));
+        }
+
+        MaterialCardView settingsCard = findViewById(R.id.settingsCard);
+        if (settingsCard != null) {
+            settingsCard.setCardBackgroundColor(isDark ? Color.parseColor("#1E1E1E") : Color.WHITE);
+        }
+
+        // Цвета текста внутри карточки
+        int textColor = isDark ? Color.WHITE : Color.parseColor("#212121");
+        applyTextColorToAll(settingsCard, textColor);
+
+        // Разделители
+        if (settingsCard != null) {
+            LinearLayout container = (LinearLayout) settingsCard.getChildAt(0);
+            if (container != null) {
+                for (int i = 0; i < container.getChildCount(); i++) {
+                    View child = container.getChildAt(i);
+                    if (child instanceof View && child.getTag() == null && child.getBackground() != null) {
+                        child.setBackgroundColor(isDark ? Color.parseColor("#2A2A2A") : Color.parseColor("#F5F5F5"));
+                    }
+                }
+            }
+        }
+
+        // Текст в профиле
+        if (tvWelcome != null) tvWelcome.setTextColor(Color.WHITE);
+        if (tvUserNick != null) tvUserNick.setTextColor(Color.parseColor("#E0E0E0"));
+    }
+    // Рекурсивный метод для установки цвета текста всем TextView внутри ViewGroup
+    private void applyTextColorToAll(ViewGroup parent, int color) {
+        if (parent == null) return;
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View child = parent.getChildAt(i);
+            if (child instanceof TextView) {
+                ((TextView) child).setTextColor(color);
+            } else if (child instanceof ViewGroup) {
+                applyTextColorToAll((ViewGroup) child, color);
+            }
+        }
+    }
+    private void deleteCache() {
+        try {
+            File cacheDir = getCacheDir();
+            deleteDir(cacheDir);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private boolean deleteDir(File dir) {
+        if (dir != null && dir.isDirectory()) {
+            String[] children = dir.list();
+            if (children != null) {
+                for (String child : children) {
+                    boolean success = deleteDir(new File(dir, child));
+                    if (!success) return false;
+                }
+            }
+        }
+        return dir.delete();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (uid != null) {
+            loadUserProfile();
+        }
+        aboutMeText = prefs.getString("about_me", "");
+        updateAboutMePreview();
+    }
+
+    private void loadUserProfile() {
+        if (uid == null || db == null) return;
+        db.collection("users").document(uid).get()
+                .addOnSuccessListener(document -> {
+                    if (document.exists()) {
+                        String name = document.getString("name");
+                        String username = document.getString("username");
+                        String avatar = document.getString("avatar");
+                        String colorHex = document.getString("avatarColor");
+
+                        if (name != null && !name.isEmpty()) {
+                            tvWelcome.setText(getString(R.string.text_auto_176) + name + "!");
+                        } else {
+                            tvWelcome.setText(getString(R.string.text_auto_177));
+                        }
+                        if (username != null) {
+                            tvUserNick.setText("@" + username);
+                        }
+                        displayAvatar(avatar, colorHex, name);
+                    }
+                })
+                .addOnFailureListener(e -> Toast.makeText(this, getString(R.string.text_auto_178), Toast.LENGTH_SHORT).show());
+    }
+
+    private void displayAvatar(String avatar, String colorHex, String name) {
+        ivAvatar.setVisibility(View.GONE);
+        tvInitials.setVisibility(View.VISIBLE);
+
+        if (avatar != null && avatar.startsWith("http")) {
+            tvInitials.setVisibility(View.GONE);
+            ivAvatar.setVisibility(View.VISIBLE);
+            Glide.with(this)
+                    .load(avatar)
+                    .circleCrop()
+                    .signature(new com.bumptech.glide.signature.ObjectKey(System.currentTimeMillis()))
+                    .into(ivAvatar);
+        } else {
+            try {
+                int iconRes = Integer.parseInt(avatar);
+                tvInitials.setVisibility(View.GONE);
+                ivAvatar.setVisibility(View.VISIBLE);
+                ivAvatar.setImageResource(iconRes);
+                cardAvatarContainer.setCardBackgroundColor(Color.WHITE);
+            } catch (Exception e) {
+                if (name != null && !name.isEmpty()) {
+                    tvInitials.setText(name.substring(0, 1).toUpperCase());
+                }
+                if (colorHex != null && !colorHex.isEmpty()) {
+                    try {
+                        cardAvatarContainer.setCardBackgroundColor(Color.parseColor(colorHex));
+                    } catch (Exception ex) {
+                        cardAvatarContainer.setCardBackgroundColor(Color.GRAY);
+                    }
+                }
+            }
+        }
+    }
+
+    private void showLuxuryAuthDialog() {
+        // 1. Создаем билдер каждый раз заново
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        android.view.View view = getLayoutInflater().inflate(R.layout.dialog_confirm_auth, null);
+        builder.setView(view);
+
+        android.app.AlertDialog dialog = builder.create();
+
+        // Делаем фон прозрачным для красоты
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        }
+
+        EditText etPass = view.findViewById(R.id.etConfirmPass);
+        MaterialButton btnConfirm = view.findViewById(R.id.btnConfirmAuth);
+
+        // Очищаем поле, если там что-то было
+        etPass.setText("");
+
+        btnConfirm.setOnClickListener(v -> {
+            String inputPassword = etPass.getText().toString().trim();
+
+            if (inputPassword.isEmpty()) {
+                etPass.setError(getString(R.string.text_auto_179));
+                return;
+            }
+
+            // Блокируем кнопку, чтобы не нажали дважды пока идет запрос
+            btnConfirm.setEnabled(false);
+
+            String email = FirebaseAuth.getInstance().getCurrentUser().getEmail();
+            if (email == null) {
+                btnConfirm.setEnabled(true);
+                return;
+            }
+
+            AuthCredential credential = EmailAuthProvider.getCredential(email, inputPassword);
+
+            FirebaseAuth.getInstance().getCurrentUser().reauthenticate(credential)
+                    .addOnSuccessListener(aVoid -> {
+                        // Сохраняем пароль
+                        getSharedPreferences("OzTrip_Prefs", MODE_PRIVATE)
+                                .edit()
+                                .putString("temp_pass", inputPassword)
+                                .apply();
+
+                        dialog.dismiss();
+                        btnConfirm.setEnabled(true);
+
+                        // Переходим в редактирование
+                        Intent intent = new Intent(SettingsActivity.this, EditProfileActivity.class);
+                        startActivity(intent);
+                    })
+                    .addOnFailureListener(e -> {
+                        btnConfirm.setEnabled(true);
+                        etPass.setError(getString(R.string.text_auto_180));
+                        Toast.makeText(this, getString(R.string.text_auto_61) + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+        });
+
+        dialog.show();
+    }
+}
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\TravelList.java ---
+
+package com.example.oztrip;
+
+import androidx.room.Entity;
+import androidx.room.Ignore;
+import androidx.room.PrimaryKey;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.maplibre.android.geometry.LatLng; // Проверь этот импорт для точек
+
+public class TravelList {
+    public String name;
+    public ArrayList<SavedLocation> locations = new ArrayList<>();
+    // ДОБАВЬ ЭТО: теперь у каждого листа своя линия
+    public ArrayList<org.maplibre.android.geometry.LatLng> pathPoints = new ArrayList<>();
+
+    public TravelList(String name) { this.name = name; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", name);
+
+        // Сохраняем locations как список мапов
+        List<Map<String, Object>> locMaps = new ArrayList<>();
+        for (SavedLocation loc : locations) {
+            locMaps.add(loc.toMap());
+        }
+        map.put("locations", locMaps);
+
+        // Сохраняем pathPoints как список объектов с lat/lng
+        List<Map<String, Double>> points = new ArrayList<>();
+        for (LatLng p : pathPoints) {
+            Map<String, Double> point = new HashMap<>();
+            point.put("lat", p.getLatitude());
+            point.put("lng", p.getLongitude());
+            points.add(point);
+        }
+        map.put("pathPoints", points);
+        return map;
+    }
+
+    public static TravelList fromMap(String id, Map<String, Object> map) {
+        String name = (String) map.get("name");
+        TravelList list = new TravelList(name);
+
+        // Восстанавливаем locations
+        List<Map<String, Object>> locMaps = (List<Map<String, Object>>) map.get("locations");
+        if (locMaps != null) {
+            for (Map<String, Object> locMap : locMaps) {
+                list.locations.add(SavedLocation.fromMap(locMap, null));
+            }
+        }
+
+        // Восстанавливаем pathPoints
+        List<Map<String, Double>> points = (List<Map<String, Double>>) map.get("pathPoints");
+        if (points != null) {
+            for (Map<String, Double> point : points) {
+                list.pathPoints.add(new LatLng(point.get("lat"), point.get("lng")));
+            }
+        }
+        return list;
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\TravelListAdapter.java ---
+
+package com.example.oztrip;
+
+import android.annotation.SuppressLint;
+import android.graphics.Color;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.CheckBox;
+import android.widget.ImageView;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+import com.google.android.material.card.MaterialCardView;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+public class TravelListAdapter extends RecyclerView.Adapter<TravelListAdapter.ViewHolder> {
+    private List<TravelList> lists;
+    private OnListClickListener listener;
+    private int selectedIndex = 0;
+    private boolean isSheetMode;
+
+    // Поля для режима выбора (только для sheet)
+    private boolean selectionMode = false;
+    private Set<Integer> selectedPositions = new HashSet<>();
+    private OnSelectionChangeListener selectionListener;
+
+    public interface OnListClickListener {
+        void onListClick(int position);
+        void onListRename(int position, String oldName);
+    }
+
+    public interface OnSelectionChangeListener {
+        void onSelectionChanged(int selectedCount);
+    }
+
+    public TravelListAdapter(List<TravelList> lists, OnListClickListener listener) {
+        this(lists, listener, false);
+    }
+
+    public TravelListAdapter(List<TravelList> lists, OnListClickListener listener, boolean isSheetMode) {
+        this.lists = lists;
+        this.listener = listener;
+        this.isSheetMode = isSheetMode;
+    }
+
+    public void setSelectionChangeListener(OnSelectionChangeListener listener) {
+        this.selectionListener = listener;
+    }
+
+    public boolean isSelectionMode() { return selectionMode; }
+
+    public void setSelectionMode(boolean enabled) {
+        if (selectionMode == enabled) return;
+        selectionMode = enabled;
+        selectedPositions.clear();
+        notifyDataSetChanged();
+        if (selectionListener != null) selectionListener.onSelectionChanged(0);
+        if (modeChangeListener != null) modeChangeListener.onSelectionModeChanged(enabled);
+    }
+
+    public Set<Integer> getSelectedPositions() { return selectedPositions; }
+
+    public void toggleSelection(int position) {
+        if (selectedPositions.contains(position)) {
+            selectedPositions.remove(position);
+        } else {
+            selectedPositions.add(position);
+        }
+        notifyItemChanged(position);
+        if (selectionListener != null) selectionListener.onSelectionChanged(selectedPositions.size());
+    }
+
+    public void clearSelection() {
+        selectedPositions.clear();
+        notifyDataSetChanged();
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        int layoutId = isSheetMode ? R.layout.item_travel_list_sheet : R.layout.item_travel_list;
+        View v = LayoutInflater.from(parent.getContext()).inflate(layoutId, parent, false);
+        return new ViewHolder(v);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, @SuppressLint("RecyclerView") int position) {
+        TravelList list = lists.get(position);
+        holder.text.setText(list.name);
+
+        if (isSheetMode) {
+            if (selectionMode) {
+                if (holder.checkBox != null) {
+                    holder.checkBox.setVisibility(View.VISIBLE);
+                    holder.checkBox.setChecked(selectedPositions.contains(position));
+                }
+                if (holder.editIcon != null) holder.editIcon.setVisibility(View.GONE);
+                holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item);
+                holder.text.setTextColor(Color.WHITE);  // Белый текст
+            } else {
+                if (holder.checkBox != null) holder.checkBox.setVisibility(View.GONE);
+                if (position == selectedIndex) {
+                    holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item_active);
+                    holder.text.setTextColor(Color.WHITE);
+                    if (holder.editIcon != null) {
+                        holder.editIcon.setVisibility(View.VISIBLE);
+                        holder.editIcon.setColorFilter(Color.WHITE);
+                    }
+                } else {
+                    holder.itemView.setBackgroundResource(R.drawable.bg_sheet_item);
+                    holder.text.setTextColor(Color.parseColor("#B0B0B0")); // Серый текст
+                    if (holder.editIcon != null) holder.editIcon.setVisibility(View.GONE);
+                }
+            }
+        } else {
+        MaterialCardView card = (MaterialCardView) holder.itemView;
+        if (holder.checkBox != null) holder.checkBox.setVisibility(View.GONE);
+
+        holder.editIcon.setVisibility(View.VISIBLE);   // иконка всегда занимает место
+
+        if (position == selectedIndex) {
+            card.setCardBackgroundColor(Color.parseColor("#FF9800"));
+            card.setStrokeColor(Color.WHITE);
+            card.setStrokeWidth(dpToPx(2, holder.itemView));
+            holder.text.setTextColor(Color.WHITE);
+            holder.text.setAlpha(1.0f);
+            holder.editIcon.setAlpha(1.0f);
+            holder.editIcon.setColorFilter(Color.WHITE);
+            holder.editIcon.setClickable(true);
+        } else {
+            card.setCardBackgroundColor(Color.parseColor("#CCFFFFFF"));
+            card.setStrokeColor(Color.WHITE);
+            card.setStrokeWidth(dpToPx(1, holder.itemView));
+            holder.text.setTextColor(Color.parseColor("#B0B0B0"));
+            holder.text.setAlpha(0.9f);
+            holder.editIcon.setAlpha(0f);              // невидима, но место занято
+            holder.editIcon.setColorFilter(null);
+            holder.editIcon.setClickable(false);
+        }
+
+    }
+
+        // Общие обработчики кликов
+        holder.itemView.setOnClickListener(v -> {
+            if (isSheetMode && selectionMode) {
+                toggleSelection(position);
+            } else {
+                if (selectedIndex != position) {
+                    int old = selectedIndex;
+                    selectedIndex = position;
+                    notifyItemChanged(old);
+                    notifyItemChanged(selectedIndex);
+                    listener.onListClick(position);
+                    v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                }
+            }
+        });
+
+        holder.itemView.setOnLongClickListener(v -> {
+            if (isSheetMode && !selectionMode) {
+                setSelectionMode(true);
+                toggleSelection(position);
+                return true;
+            }
+            if (!isSheetMode) {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                listener.onListRename(position, list.name);
+                return true;
+            }
+            return false;
+        });
+
+        if (holder.editIcon != null) {
+            holder.editIcon.setOnClickListener(v -> {
+                if (!selectionMode) {
+                    if (position != selectedIndex) {
+                        // Поездка неактивна → просто активируем её
+                        int old = selectedIndex;
+                        selectedIndex = position;
+                        notifyItemChanged(old);
+                        notifyItemChanged(selectedIndex);
+                        listener.onListClick(position);
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                    } else {
+                        // Поездка уже активна → открываем переименование
+                        listener.onListRename(position, list.name);
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                    }
+                }
+            });
+        }
+        if (holder.checkBox != null) {
+            holder.checkBox.setOnCheckedChangeListener(null);
+            holder.checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (isChecked && !selectedPositions.contains(position)) {
+                    selectedPositions.add(position);
+                } else if (!isChecked) {
+                    selectedPositions.remove(position);
+                }
+                if (selectionListener != null)
+                    selectionListener.onSelectionChanged(selectedPositions.size());
+            });
+        }
+    }
+
+    private int dpToPx(int dp, View v) {
+        return (int) (dp * v.getContext().getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    public int getItemCount() {
+        return lists.size();
+    }
+
+    public void setSelectedIndex(int index) {
+        int prev = this.selectedIndex;
+        this.selectedIndex = index;
+        if (prev >= 0 && prev < lists.size()) notifyItemChanged(prev);
+        if (index >= 0 && index < lists.size()) notifyItemChanged(index);
+    }
+
+    static class ViewHolder extends RecyclerView.ViewHolder {
+        TextView text;
+        ImageView editIcon;
+        CheckBox checkBox;
+
+        ViewHolder(View v) {
+            super(v);
+            text = v.findViewById(R.id.tvListName);
+            editIcon = v.findViewById(R.id.ivEditList);
+            checkBox = v.findViewById(R.id.checkboxSelect);
+        }
+    }
+    public interface OnSelectionModeChangeListener {
+        void onSelectionModeChanged(boolean enabled);
+    }
+    private OnSelectionModeChangeListener modeChangeListener;
+
+    public void setOnSelectionModeChangeListener(OnSelectionModeChangeListener listener) {
+        this.modeChangeListener = listener;
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\TravelListSheetFragment.java ---
+
+package com.example.oztrip;
+
+import android.app.Dialog;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
+public class TravelListSheetFragment extends BottomSheetDialogFragment {
+
+    private RecyclerView recyclerView;
+    private EditText etSearch;
+    private LinearLayout headerLayout, selectionToolbar;
+    private TextView tvSelectedCount;
+    private View btnSelect, btnCancelSelection, btnDeleteSelected;
+    private TravelListAdapter adapter;
+    private List<TravelList> allLists;
+    private int activeIndex;
+    private List<Integer> indexMap = new ArrayList<>();
+
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
+        return new BottomSheetDialog(requireContext(), R.style.TransparentBottomSheet);
+    }
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.bottom_sheet_travel_lists, container, false);
+
+        recyclerView = view.findViewById(R.id.rvSheetTravelLists);
+        etSearch = view.findViewById(R.id.etSearchList);
+        headerLayout = view.findViewById(R.id.headerLayout);
+        selectionToolbar = view.findViewById(R.id.selectionToolbar);
+        tvSelectedCount = view.findViewById(R.id.tvSelectedCount);
+        btnSelect = view.findViewById(R.id.btnSelect);
+        btnCancelSelection = view.findViewById(R.id.btnCancelSelection);
+        btnDeleteSelected = view.findViewById(R.id.btnDeleteSelected);
+
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity != null) {
+            allLists = new ArrayList<>(activity.getAllTravelLists());
+            activeIndex = activity.getActiveListIndex();
+        } else {
+            allLists = new ArrayList<>();
+            activeIndex = 0;
+        }
+
+        filterLists("");
+
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterLists(s.toString());
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+
+        btnSelect.setOnClickListener(v -> {
+            adapter.setSelectionMode(true);
+            headerLayout.setVisibility(View.GONE);
+            selectionToolbar.setVisibility(View.VISIBLE);
+            tvSelectedCount.setText(getString(R.string.text_auto_181));
+            btnDeleteSelected.setEnabled(false);
+        });
+
+        btnCancelSelection.setOnClickListener(v -> {
+            adapter.setSelectionMode(false);
+            headerLayout.setVisibility(View.VISIBLE);
+            selectionToolbar.setVisibility(View.GONE);
+        });
+
+        btnDeleteSelected.setOnClickListener(v -> {
+            if (adapter == null) return;
+            Set<Integer> selected = adapter.getSelectedPositions();
+            if (selected.isEmpty()) return;
+
+            View dialogView = inflater.inflate(R.layout.dialog_confirm_delete, null);
+            TextView tvMessage = dialogView.findViewById(R.id.tvConfirmMessage);
+            tvMessage.setText(getString(R.string.text_auto_182) + selected.size() + getString(R.string.text_auto_183));
+
+            AlertDialog confirmDialog = new AlertDialog.Builder(getActivity(), R.style.PremiumDialogTheme)
+                    .setView(dialogView)
+                    .create();
+
+            dialogView.findViewById(R.id.btnConfirmDelete).setOnClickListener(btn -> {
+                List<Integer> realIndices = new ArrayList<>();
+                for (Integer pos : selected) {
+                    realIndices.add(indexMap.get(pos));
+                }
+                Collections.sort(realIndices, Collections.reverseOrder());
+                for (int idx : realIndices) {
+                    ((MainActivity) getActivity()).removeTravelListByIndex(idx);
+                }
+
+                Toast.makeText(getActivity(), getString(R.string.text_auto_184) + realIndices.size() + getString(R.string.text_auto_185), Toast.LENGTH_SHORT).show();
+
+                // Закрываем диалог
+                confirmDialog.dismiss();
+
+                // Обновляем данные
+                allLists = new ArrayList<>(((MainActivity) getActivity()).getAllTravelLists());
+                activeIndex = ((MainActivity) getActivity()).getActiveListIndex();
+                filterLists(etSearch.getText().toString());
+
+                // Сбрасываем режим выбора и показываем заголовок
+                adapter.setSelectionMode(false);
+                headerLayout.setVisibility(View.VISIBLE);
+                selectionToolbar.setVisibility(View.GONE);
+            });
+
+            dialogView.findViewById(R.id.btnConfirmCancel).setOnClickListener(btn -> confirmDialog.dismiss());
+            confirmDialog.show();
+        });
+
+        return view;
+    }
+
+    private void filterLists(String query) {
+        if (allLists == null) return;
+        List<TravelList> filtered = new ArrayList<>();
+        indexMap.clear();
+        for (int i = 0; i < allLists.size(); i++) {
+            if (allLists.get(i).name.toLowerCase().contains(query.toLowerCase())) {
+                filtered.add(allLists.get(i));
+                indexMap.add(i);
+            }
+        }
+
+        adapter = new TravelListAdapter(filtered, new TravelListAdapter.OnListClickListener() {
+            @Override
+            public void onListClick(int position) {
+                if (adapter.isSelectionMode()) {
+                    adapter.toggleSelection(position);
+                    return;
+                }
+                int realIndex = indexMap.get(position);
+                MainActivity act = (MainActivity) getActivity();
+                if (act != null) act.switchTravelList(realIndex);
+                dismiss();
+            }
+
+            @Override
+            public void onListRename(int position, String oldName) {
+                int realIndex = indexMap.get(position);
+                MainActivity act = (MainActivity) getActivity();
+                if (act != null) {
+                    act.showRenameDialog(realIndex, oldName, () -> {
+                        filterLists(etSearch.getText().toString());
+                    });
+                }
+            }
+        }, true);
+        adapter.setOnSelectionModeChangeListener(enabled -> {
+            if (enabled) {
+                // Включаем режим выбора – скрываем заголовок, показываем панель
+                headerLayout.setVisibility(View.GONE);
+                selectionToolbar.setVisibility(View.VISIBLE);
+                tvSelectedCount.setText(getString(R.string.text_auto_181));
+                btnDeleteSelected.setEnabled(false);
+            } else {
+                // Выключаем режим – возвращаем заголовок, скрываем панель
+                headerLayout.setVisibility(View.VISIBLE);
+                selectionToolbar.setVisibility(View.GONE);
+            }
+        });
+        adapter.setSelectionChangeListener(count -> {
+            tvSelectedCount.setText(count + getString(R.string.text_auto_186));
+            btnDeleteSelected.setEnabled(count > 0);
+        });
+
+        int activePos = indexMap.indexOf(activeIndex);
+        adapter.setSelectedIndex(activePos);
+
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerView.setAdapter(adapter);
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\TravelRepository.java ---
+
+package com.example.oztrip;
+
+import android.util.Log;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.*;
+import java.util.*;
+
+public class TravelRepository {
+    private final FirebaseFirestore db;
+
+    public TravelRepository() {
+        db = FirebaseFirestore.getInstance();
+    }
+
+    private String getUserId() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return null;
+        return FirebaseAuth.getInstance().getCurrentUser().getUid();
+    }
+
+    public void loadAllLists(OnDataLoadedListener listener) {
+        String userId = getUserId();
+        if (userId == null) {
+            if (listener != null) listener.onError("Not signed in");
+            return;
+        }
+        db.collection("travel_lists")
+                .whereEqualTo("userId", userId)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<TravelList> lists = new ArrayList<>();
+                    for (DocumentSnapshot doc : queryDocumentSnapshots) {
+                        TravelList list = TravelList.fromMap(doc.getId(), doc.getData());
+                        if (list != null) lists.add(list);
+                    }
+                    listener.onLoaded(lists);
+                })
+                .addOnFailureListener(e -> listener.onError(e.getMessage()));
+    }
+
+    public void saveAllLists(List<TravelList> lists, OnSaveListener listener) {
+        String userId = getUserId();
+        if (userId == null) {
+            if (listener != null) listener.onError("Not signed in");
+            return;
+        }
+        db.collection("travel_lists")
+                .whereEqualTo("userId", userId)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                        doc.getReference().delete();
+                    }
+                    for (TravelList list : lists) {
+                        Map<String, Object> data = list.toMap();
+                        data.put("userId", userId);
+                        db.collection("travel_lists").add(data);
+                    }
+                    if (listener != null) listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    if (listener != null) listener.onError(e.getMessage());
+                });
+    }
+
+    public interface OnDataLoadedListener {
+        void onLoaded(List<TravelList> lists);
+        void onError(String error);
+    }
+
+    public interface OnSaveListener {
+        void onSuccess();
+        void onError(String error);
+    }
+}

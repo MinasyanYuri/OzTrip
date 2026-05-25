@@ -1,0 +1,474 @@
+
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\ChatAdapter.java ---
+
+package com.example.oztrip;
+
+import android.graphics.Color;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.TextPaint;
+import android.text.method.LinkMovementMethod;
+import android.text.style.ClickableSpan;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
+
+    private final List<ChatMessage> messages = new ArrayList<>();
+
+    public interface OnLocationClickListener {
+        void onLocationClick(double lat, double lng);
+    }
+
+    private OnLocationClickListener locationClickListener;
+
+    public void setOnLocationClickListener(OnLocationClickListener listener) {
+        this.locationClickListener = listener;
+    }
+
+    public void addMessage(ChatMessage msg) {
+        messages.add(msg);
+        notifyItemInserted(messages.size() - 1);
+    }
+
+    public void replaceLastMessage(ChatMessage newMsg) {
+        int pos = messages.size() - 1;
+        if (pos >= 0) {
+            messages.set(pos, newMsg);
+            notifyItemChanged(pos);
+        }
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_message, parent, false);
+        return new ViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        ChatMessage msg = messages.get(position);
+
+        if (!msg.isUser) {
+            // Сообщение от бота – ищем координатные ссылки
+            SpannableString spannable = new SpannableString(msg.text);
+            Pattern pattern = Pattern.compile("\\[coord:([^,\\]]+),([^,\\]]+)\\]");
+            Matcher matcher = pattern.matcher(spannable);
+
+            while (matcher.find()) {
+                String latStr = matcher.group(1).trim();
+                String lngStr = matcher.group(2).trim();
+                try {
+                    double lat = Double.parseDouble(latStr);
+                    double lng = Double.parseDouble(lngStr);
+                    ClickableSpan span = new ClickableSpan() {
+                        @Override
+                        public void onClick(@NonNull View widget) {
+                            if (locationClickListener != null) {
+                                locationClickListener.onLocationClick(lat, lng);
+                            }
+                        }
+                        @Override
+                        public void updateDrawState(@NonNull TextPaint ds) {
+                            super.updateDrawState(ds);
+                            ds.setUnderlineText(true);
+                            ds.setColor(Color.BLUE);
+                        }
+                    };
+                    spannable.setSpan(span, matcher.start(), matcher.end(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                } catch (NumberFormatException ignored) {}
+            }
+
+            holder.textView.setText(spannable);
+            holder.textView.setMovementMethod(LinkMovementMethod.getInstance());
+        } else {
+            // Сообщение пользователя – обычный текст
+            holder.textView.setText(msg.text);
+        }
+
+        // Внешний вид (цвет фона) оставляем как было
+        if (msg.isUser) {
+            holder.textView.setBackgroundResource(R.drawable.bg_message_user);
+            holder.textView.setTextColor(holder.itemView.getContext()
+                    .getResources().getColor(android.R.color.white));
+            ((ViewGroup.MarginLayoutParams) holder.textView.getLayoutParams())
+                    .setMargins(80, 0, 0, 0);
+        } else {
+            holder.textView.setBackgroundResource(R.drawable.bg_message_bot);
+            ((ViewGroup.MarginLayoutParams) holder.textView.getLayoutParams())
+                    .setMargins(0, 0, 80, 0);
+        }
+    }
+
+    @Override
+    public int getItemCount() {
+        return messages.size();
+    }
+
+    static class ViewHolder extends RecyclerView.ViewHolder {
+        TextView textView;
+        ViewHolder(View itemView) {
+            super(itemView);
+            textView = itemView.findViewById(R.id.messageText);
+        }
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\ChatMessage.java ---
+
+package com.example.oztrip;
+
+import java.util.Objects;
+
+public class ChatMessage {
+    public String text;
+    public boolean isUser;
+    public long id; // для идентификации в DiffUtil
+
+    public ChatMessage(String text, boolean isUser) {
+        this.text = text;
+        this.isUser = isUser;
+        this.id = System.nanoTime(); // уникальный ID
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ChatMessage that = (ChatMessage) o;
+        return id == that.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\Converters.java ---
+
+package com.example.oztrip;
+
+import androidx.room.TypeConverter;
+
+import com.google.common.reflect.TypeToken;
+import com.google.gson.Gson;
+
+import org.maplibre.android.geometry.LatLng;
+
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Converters {
+    @TypeConverter
+    public static String fromLatLngList(List<LatLng> list) {
+        if (list == null) return null;
+        StringBuilder sb = new StringBuilder();
+        for (org.maplibre.android.geometry.LatLng loc : list) {
+            sb.append(loc.getLatitude()).append(",").append(loc.getLongitude()).append(";");
+        }
+        return sb.toString();
+    }
+
+    @TypeConverter
+    public static List<org.maplibre.android.geometry.LatLng> toLatLngList(String data) {
+        if (data == null || data.isEmpty()) return new ArrayList<>();
+        List<org.maplibre.android.geometry.LatLng> list = new ArrayList<>();
+        String[] points = data.split(";");
+        for (String p : points) {
+            String[] latLng = p.split(",");
+            if (latLng.length == 2) {
+                list.add(new org.maplibre.android.geometry.LatLng(
+                        Double.parseDouble(latLng[0]), Double.parseDouble(latLng[1])));
+            }
+        }
+        return list;
+    }
+
+    @TypeConverter
+    public static List<String> fromString(String value) {
+        Type listType = new TypeToken<ArrayList<String>>() {}.getType();
+        return new Gson().fromJson(value, listType);
+    }
+
+    @TypeConverter
+    public static String fromList(List<String> list) {
+        Gson gson = new Gson();
+        return gson.toJson(list);
+    }
+}
+
+// --- FILE: ./app/src/main/java/com/example/oztrip\EditProfileActivity.java ---
+
+package com.example.oztrip;
+
+import android.annotation.SuppressLint;
+import android.content.Intent;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.bumptech.glide.Glide;
+import com.google.android.material.card.MaterialCardView;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class EditProfileActivity extends BaseActivity  {
+
+    private EditText etName, etUsername, etEmail, etPassword;
+    private ImageView ivAvatar;
+    private TextView tvInitials;
+    private MaterialCardView cardAvatarContainer;
+    private FirebaseFirestore db;
+    private FirebaseAuth mAuth;
+    private String uid;
+    private String currentAvatarUrl = "initials"; // Храним текущую аватарку
+    private String currentColorHex = "#FF9500";   // Храним текущий цвет
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_edit_profile);
+
+// Внутри onCreate замени инициализацию полей на эту:
+        // 1. ВОТ ЭТОГО НЕ ХВАТАЕТ:
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+
+        if (mAuth.getCurrentUser() != null) {
+            uid = mAuth.getCurrentUser().getUid();
+        } else {
+            // Если юзер не залогинен, не даем ему тут находиться
+            finish();
+            return;
+        }
+        etName = findViewById(R.id.etEditName);
+        etUsername = findViewById(R.id.etEditUsername);
+        etEmail = findViewById(R.id.etEditEmail);
+        etPassword = findViewById(R.id.etEditPassword);
+
+        ivAvatar = findViewById(R.id.ivEditAvatar);
+        tvInitials = findViewById(R.id.tvEditInitials);
+        cardAvatarContainer = findViewById(R.id.cardEditAvatarContainer);
+
+// Кнопка выбора аватара теперь на FloatingActionButton (но ID тот же)
+        findViewById(R.id.btnOpenAvatarEditor).setOnClickListener(v -> {
+            Intent intent = new Intent(this, AvatarEditorActivity.class);
+            intent.putExtra("user_name", etName.getText().toString());
+            intent.putExtra("current_avatar", currentAvatarUrl);
+            intent.putExtra("current_color", currentColorHex);
+            intent.putExtra("is_editing", true);
+            startActivity(intent);
+        });
+
+        // Заполняем пароль из временного хранилища
+        String savedPass = getSharedPreferences("OzTrip_Prefs", MODE_PRIVATE)
+                .getString("temp_pass", "");
+        if (!savedPass.isEmpty()) {
+            etPassword.setText(savedPass);
+        }
+
+        loadUserData();
+
+        // Кнопка сохранения
+        findViewById(R.id.btnSaveAll).setOnClickListener(v -> saveProfileChanges());
+    }
+
+    private void loadUserData() {
+        db.collection("users").document(uid).get().addOnSuccessListener(doc -> {
+            if (doc.exists()) {
+                String name = doc.getString("name");
+                String username = doc.getString("username");
+                String email = doc.getString("email");
+
+                // КЛЮЧЕВОЙ МОМЕНТ: Сохраняем данные в переменные класса
+                currentAvatarUrl = doc.getString("avatar");
+                currentColorHex = doc.getString("avatarColor");
+
+                etName.setText(name);
+                etUsername.setText(username);
+                etEmail.setText(email);
+                // В loadUserData после etEmail.setText(email);
+                etEmail.setFocusable(false);
+                etEmail.setAlpha(0.6f); // Делаем его чуть тусклее
+
+                displayAvatar(currentAvatarUrl, currentColorHex, name);
+            }
+        });
+    }
+    private void displayAvatar(String avatar, String colorHex, String name) {
+        ivAvatar.setVisibility(View.GONE);
+        tvInitials.setVisibility(View.VISIBLE);
+
+        if (avatar == null || avatar.isEmpty() || avatar.equals("initials")) {
+            // СЛУЧАЙ 1: Просто буквы
+            showInitials(name, colorHex);
+        }
+        else if (avatar.startsWith("http")) {
+            // СЛУЧАЙ 2: Ссылка из интернета
+            tvInitials.setVisibility(View.GONE);
+            ivAvatar.setVisibility(View.VISIBLE);
+            Glide.with(this).load(avatar).circleCrop().into(ivAvatar);
+        }
+        else {
+            // СЛУЧАЙ 3: Твой getString(R.string.text_auto_69) (ID ресурса или имя ресурса)
+            try {
+                // Пробуем преобразовать строку "2131230962" в число
+                int resId = Integer.parseInt(avatar);
+                tvInitials.setVisibility(View.GONE);
+                ivAvatar.setVisibility(View.VISIBLE);
+
+                Glide.with(this)
+                        .load(resId) // Загружаем по ID
+                        .circleCrop()
+                        .into(ivAvatar);
+            } catch (NumberFormatException e) {
+                // Если в базе вдруг имя файла "giraffe", а не ID
+                showInitials(name, colorHex);
+            }
+        }
+    }
+
+    // Вынес отрисовку букв в отдельный метод для чистоты
+    private void showInitials(String name, String colorHex) {
+        ivAvatar.setVisibility(View.GONE);
+        tvInitials.setVisibility(View.VISIBLE);
+        if (name != null && !name.isEmpty()) {
+            tvInitials.setText(name.substring(0, 1).toUpperCase());
+        }
+        tvInitials.setTextColor(Color.WHITE);
+        try {
+            cardAvatarContainer.setCardBackgroundColor(Color.parseColor(colorHex));
+        } catch (Exception e) {
+            cardAvatarContainer.setCardBackgroundColor(Color.parseColor("#FF9800"));
+        }
+    }
+
+    private void executeFinalUpdate(String name, String username, String email) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("name", name);
+        updates.put("username", username);
+        updates.put("email", email);
+
+        // 1. Сначала обновляем текстовые данные в Firestore
+        db.collection("users").document(uid).update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    String newPass = etPassword.getText().toString().trim();
+
+                    // Достаем старый пароль из SharedPreferences для сравнения
+                    String initialPass = getSharedPreferences("OzTrip_Prefs", MODE_PRIVATE)
+                            .getString("temp_pass", "");
+
+                    // 2. Проверяем: введен ли новый пароль, не пустой ли он и изменился ли он
+                    if (!newPass.isEmpty() && !newPass.equals(initialPass)) {
+
+                        // ПРОВЕРКА НА 6 СИМВОЛОВ
+                        if (newPass.length() < 6) {
+                            etPassword.setError(getString(R.string.text_auto_70));
+                            Toast.makeText(this, getString(R.string.text_auto_71), Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        // 3. Обновляем пароль в Firebase Auth
+                        mAuth.getCurrentUser().updatePassword(newPass)
+                                .addOnSuccessListener(unused -> {
+                                    // Очищаем временный пароль, так как он больше не актуален
+                                    getSharedPreferences("OzTrip_Prefs", MODE_PRIVATE).edit().remove("temp_pass").apply();
+
+                                    Toast.makeText(this, getString(R.string.text_auto_72), Toast.LENGTH_SHORT).show();
+                                    finish(); // Закрываем экран и возвращаемся в Settings
+                                })
+                                .addOnFailureListener(e -> {
+                                    Toast.makeText(this, getString(R.string.text_auto_73) + e.getMessage(), Toast.LENGTH_LONG).show();
+                                });
+                    } else {
+                        // Если пароль не меняли, просто закрываем экран
+                        Toast.makeText(this, getString(R.string.text_auto_74), Toast.LENGTH_SHORT).show();
+                        finish();
+                    }
+                })
+                .addOnFailureListener(e -> Toast.makeText(this, getString(R.string.text_auto_75) + e.getMessage(), Toast.LENGTH_SHORT).show());
+    }
+
+    private void saveProfileChanges() {
+        String newName = etName.getText().toString().trim();
+        String newUsername = etUsername.getText().toString().trim();
+        String newEmail = etEmail.getText().toString().trim();
+
+        if (newUsername.isEmpty() || newName.isEmpty()) {
+            Toast.makeText(this, getString(R.string.text_auto_76), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        db.collection("users").whereEqualTo("username", newUsername).get().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                boolean isTaken = false;
+                for (QueryDocumentSnapshot document : task.getResult()) {
+                    if (!document.getId().equals(uid)) {
+                        isTaken = true;
+                        break;
+                    }
+                }
+                if (isTaken) {
+                    String suggested = generateNicknameSuggestion(newUsername);
+                    etUsername.setError(getString(R.string.text_auto_77) + suggested);
+                } else {
+                    checkEmailAndSave(newName, newUsername, newEmail);
+                }
+            }
+        });
+    }
+
+    private void checkEmailAndSave(String name, String username, String email) {
+        db.collection("users").whereEqualTo("email", email).get().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                boolean emailTaken = false;
+                for (QueryDocumentSnapshot document : task.getResult()) {
+                    if (!document.getId().equals(uid)) {
+                        emailTaken = true;
+                        break;
+                    }
+                }
+                if (emailTaken) {
+                    etEmail.setError(getString(R.string.text_auto_78));
+                } else {
+                    executeFinalUpdate(name, username, email);
+                }
+            }
+        });
+    }
+
+    private String generateNicknameSuggestion(String baseName) {
+        return baseName.toLowerCase() + ((int) (Math.random() * 900) + 100);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Каждый раз, когда мы возвращаемся на этот экран,
+        // данные будут подтягиваться из Firestore заново
+        loadUserData();
+    }
+
+}
