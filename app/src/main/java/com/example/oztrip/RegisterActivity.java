@@ -1,6 +1,8 @@
 package com.example.oztrip;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -9,14 +11,22 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 
-public class RegisterActivity extends AppCompatActivity {
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+
+public class RegisterActivity extends BaseActivity  {
 
     private FirebaseAuth mAuth;
     private EditText etEmail, etPassword;
@@ -70,6 +80,25 @@ public class RegisterActivity extends AppCompatActivity {
         tvLoginLink.setOnClickListener(v -> {
             startActivity(new Intent(this, LoginActivity.class));
         });
+
+        mAuth.addAuthStateListener(auth -> {
+            FirebaseUser user = auth.getCurrentUser();
+            if (user != null) {
+                // Пользователь авторизован – проверяем флаг завершения регистрации
+                SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+                boolean complete = prefs.getBoolean("registration_complete", false);
+
+                Intent intent;
+                if (complete) {
+                    intent = new Intent(RegisterActivity.this, MainActivity.class);
+                } else {
+                    intent = new Intent(RegisterActivity.this, ProfileSetupActivity.class);
+                    intent.putExtra("user_email", user.getEmail());
+                }
+                startActivity(intent);
+                finish();
+            }
+        });
     }
 
     private void enterGuestMode() {
@@ -85,12 +114,17 @@ public class RegisterActivity extends AppCompatActivity {
         finish();
     }
 
+    // Вспомогательный метод для запуска проверки в фоне
     private void performRegistration() {
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
 
         if (email.isEmpty()) {
             showError(getString(R.string.text_auto_161));
+            return;
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            showError("Введите корректный email");
             return;
         }
         if (password.length() < 6) {
@@ -101,15 +135,33 @@ public class RegisterActivity extends AppCompatActivity {
         pbLoading.setVisibility(View.VISIBLE);
         btnRegister.setEnabled(false);
 
+        // Проверка реальности почты (без API-ключей!)
+        AsyncTask.execute(() -> {
+            String result = EmailValidator.verify(email);
+            runOnUiThread(() -> {
+                pbLoading.setVisibility(View.GONE);
+                btnRegister.setEnabled(true);
+                if ("valid".equals(result)) {
+                    createFirebaseAccount(email, password);
+                } else if ("invalid".equals(result)) {
+                    showError("Такой email не существует. Проверьте адрес.");
+                } else {
+                    Toast.makeText(RegisterActivity.this,
+                            "Не удалось проверить почту. Продолжаем без проверки.",
+                            Toast.LENGTH_LONG).show();
+                    createFirebaseAccount(email, password);
+                }
+            });
+        });
+    }
+
+    private void createFirebaseAccount(String email, String password) {
         mAuth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(this, task -> {
                     pbLoading.setVisibility(View.GONE);
                     btnRegister.setEnabled(true);
 
                     if (task.isSuccessful()) {
-                        // ОТПРАВЛЯЕМ ПИСЬМО О РЕГИСТРАЦИИ
-                        MailHelper.sendSecurityAlert(email, "register");
-
                         Intent intent = new Intent(RegisterActivity.this, ProfileSetupActivity.class);
                         intent.putExtra("user_email", email);
                         startActivity(intent);
@@ -121,8 +173,40 @@ public class RegisterActivity extends AppCompatActivity {
     }
 
 
+    private void waitForEmailVerification(FirebaseUser user) {
+        pbLoading.setVisibility(View.VISIBLE);
+        btnRegister.setEnabled(false);
 
-  
+        // Каждые 2 секунды проверяем, подтверждён ли email
+        new android.os.Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                user.reload()
+                        .addOnCompleteListener(task -> {
+                            if (task.isSuccessful()) {
+                                if (user.isEmailVerified()) {
+                                    // Подтверждено – можно продолжать
+                                    pbLoading.setVisibility(View.GONE);
+                                    btnRegister.setEnabled(true);
+                                    Toast.makeText(RegisterActivity.this,
+                                            "Email подтверждён!", Toast.LENGTH_SHORT).show();
+                                    // Переходим в ProfileSetupActivity
+                                    Intent intent = new Intent(RegisterActivity.this, ProfileSetupActivity.class);
+                                    intent.putExtra("user_email", user.getEmail());
+                                    startActivity(intent);
+                                    finish();
+                                    return;
+                                }
+                            }
+                            // Ещё не подтверждено – повторяем проверку
+                            if (!isDestroyed()) {
+                                waitForEmailVerification(user);
+                            }
+                        });
+            }
+        }, 2000);
+    }
+
     private void handleFirebaseError(Exception e) {
         tvError.setVisibility(View.VISIBLE);
         if (e instanceof FirebaseAuthUserCollisionException) {
@@ -152,13 +236,5 @@ public class RegisterActivity extends AppCompatActivity {
         etPassword.addTextChangedListener(tw);
     }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        // Проверка: если залогинен — сразу в главное меню
-        if (mAuth.getCurrentUser() != null) {
-            startActivity(new Intent(this, MainActivity.class));
-            finish();
-        }
-    }
+
 }

@@ -12,7 +12,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
 
-public class LoginActivity extends AppCompatActivity {
+public class LoginActivity extends BaseActivity  {
 
     private FirebaseAuth mAuth;
     private EditText etEmail, etPassword;
@@ -123,8 +123,10 @@ public class LoginActivity extends AppCompatActivity {
 
                     if (task.isSuccessful()) {
                         // ОТПРАВЛЯЕМ ПИСЬМО О ВХОДЕ
-                        MailHelper.sendSecurityAlert(email, "login");
-
+                        MailHelper.sendSecurityAlert(this, email, "login");
+                        getSharedPreferences("OzTripPrefs", MODE_PRIVATE).edit()
+                                .putBoolean("registration_complete", true)
+                                .apply();
                         startActivity(new Intent(LoginActivity.this, MainActivity.class));
                         finish();
                     } else {

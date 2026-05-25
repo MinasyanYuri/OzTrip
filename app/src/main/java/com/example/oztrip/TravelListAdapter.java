@@ -117,29 +117,32 @@ public class TravelListAdapter extends RecyclerView.Adapter<TravelListAdapter.Vi
                 }
             }
         } else {
-            MaterialCardView card = (MaterialCardView) holder.itemView;
-            if (holder.checkBox != null) holder.checkBox.setVisibility(View.GONE);
-            if (position == selectedIndex) {
-                card.setCardBackgroundColor(Color.parseColor("#FF9800"));
-                card.setStrokeColor(Color.WHITE);               // Белая обводка
-                card.setStrokeWidth(dpToPx(2, holder.itemView));
-                holder.text.setTextColor(Color.WHITE);
-                holder.text.setAlpha(1.0f);
-                if (holder.editIcon != null) {
-                    holder.editIcon.setVisibility(View.VISIBLE);
-                    holder.editIcon.setColorFilter(Color.WHITE);
-                }
-            } else {
-                card.setCardBackgroundColor(Color.parseColor("#CCFFFFFF"));
-                card.setStrokeColor(Color.WHITE);               // Белая обводка
-                card.setStrokeWidth(dpToPx(1, holder.itemView));
-                holder.text.setTextColor(Color.parseColor("#B0B0B0")); // Серый текст
-                holder.text.setAlpha(0.9f);
-                if (holder.editIcon != null) {
-                    holder.editIcon.setVisibility(View.GONE);
-                }
-            }
+        MaterialCardView card = (MaterialCardView) holder.itemView;
+        if (holder.checkBox != null) holder.checkBox.setVisibility(View.GONE);
+
+        holder.editIcon.setVisibility(View.VISIBLE);   // иконка всегда занимает место
+
+        if (position == selectedIndex) {
+            card.setCardBackgroundColor(Color.parseColor("#FF9800"));
+            card.setStrokeColor(Color.WHITE);
+            card.setStrokeWidth(dpToPx(2, holder.itemView));
+            holder.text.setTextColor(Color.WHITE);
+            holder.text.setAlpha(1.0f);
+            holder.editIcon.setAlpha(1.0f);
+            holder.editIcon.setColorFilter(Color.WHITE);
+            holder.editIcon.setClickable(true);
+        } else {
+            card.setCardBackgroundColor(Color.parseColor("#CCFFFFFF"));
+            card.setStrokeColor(Color.WHITE);
+            card.setStrokeWidth(dpToPx(1, holder.itemView));
+            holder.text.setTextColor(Color.parseColor("#B0B0B0"));
+            holder.text.setAlpha(0.9f);
+            holder.editIcon.setAlpha(0f);              // невидима, но место занято
+            holder.editIcon.setColorFilter(null);
+            holder.editIcon.setClickable(false);
         }
+
+    }
 
         // Общие обработчики кликов
         holder.itemView.setOnClickListener(v -> {
@@ -173,13 +176,23 @@ public class TravelListAdapter extends RecyclerView.Adapter<TravelListAdapter.Vi
 
         if (holder.editIcon != null) {
             holder.editIcon.setOnClickListener(v -> {
-                if (!selectionMode && position == selectedIndex) {
-                    listener.onListRename(position, list.name);
-                    v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                if (!selectionMode) {
+                    if (position != selectedIndex) {
+                        // Поездка неактивна → просто активируем её
+                        int old = selectedIndex;
+                        selectedIndex = position;
+                        notifyItemChanged(old);
+                        notifyItemChanged(selectedIndex);
+                        listener.onListClick(position);
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                    } else {
+                        // Поездка уже активна → открываем переименование
+                        listener.onListRename(position, list.name);
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                    }
                 }
             });
         }
-
         if (holder.checkBox != null) {
             holder.checkBox.setOnCheckedChangeListener(null);
             holder.checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {

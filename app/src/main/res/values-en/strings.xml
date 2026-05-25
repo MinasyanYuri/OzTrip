@@ -90,6 +90,10 @@
     <string name="text_87">English</string>
     <string name="text_88">Armenian</string>
 
+    <string name="text_89">Delete account</string>
+    <string name="text_90">Contact the developer</string>
+
+
     <!-- New auto-extracted strings -->
     <string name="text_auto_1">Hello! I am OzTrip AI. Now I know everything about your trips. Ask me!</string>
     <string name="text_auto_2">my</string>
@@ -262,7 +266,7 @@
     <string name="text_auto_172">Units</string>
     <string name="text_auto_173">Language</string>
     <string name="text_auto_174">Choose language</string>
-    <string name="text_auto_175">Version 1.0\nTravel assistant for Armenia.\nDeveloper: Your name.</string>
+    <string name="text_auto_175">Travel assistant for Armenia.\nDeveloper: Yuri.</string>
     <string name="text_auto_176">Hello, </string>
     <string name="text_auto_177">Hello!</string>
     <string name="text_auto_178">Load error</string>
@@ -274,4 +278,22 @@
     <string name="text_auto_184">Deleted </string>
     <string name="text_auto_185"> trip(s)</string>
     <string name="text_auto_186"> selected</string>
+
+    <string name="text_auto_187">Delete account?</string>
+    <string name="text_auto_188">All your data (trips, points, photos, settings) will be permanently deleted. Your account will be deleted. Continue?</string>
+    <string name="text_auto_189">Yes, delete</string>
+    <string name="text_auto_190">Cancel</string>
+    <string name="text_auto_191">Not specified</string>
+    <string name="text_auto_192">Rename trip</string>
+
+    <string name="text_91">Version 1.0</string>
+    <string name="text_92">About me</string>
+    <string name="text_93">Not specified</string>
+    <string name="ok">OK</string>
+    <string name="text_94">Tell us about yourself</string>
+    <string name="text_95">This data will help the AI ​​better understand your interests and provide personalized recommendations.</string>
+    <string name="text_96">For example: I love trekking and trying local cuisine...</string>
+    <string name="text_97">Clear</string>
+    <string name="text_98">Save</string>
+
 </resources>

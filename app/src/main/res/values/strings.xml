@@ -266,6 +266,9 @@
 
 
     <string name="text_88">Армянский</string>
+    <string name="text_89">Удалить аккаунт</string>
+    <string name="text_90">Написать разработчику</string>
+
 
 
     <string name="text_auto_1">Привет! Я OzTrip AI. Теперь я знаю всё о твоих поездках. Спрашивай!</string>
@@ -439,7 +442,7 @@
     <string name="text_auto_172">Единицы измерения</string>
     <string name="text_auto_173">Язык</string>
     <string name="text_auto_174">Выберите язык</string>
-    <string name="text_auto_175">Версия 1.0\nПомощник для путешествий по Армении.\nРазработчик: Ваше имя.</string>
+    <string name="text_auto_175">Помощник для путешествий по Армении.\nРазработчик: Yuri.</string>
     <string name="text_auto_176">Привет, </string>
     <string name="text_auto_177">Привет!</string>
     <string name="text_auto_178">Ошибка загрузки</string>
@@ -451,4 +454,22 @@
     <string name="text_auto_184">Удалено </string>
     <string name="text_auto_185"> поездок</string>
     <string name="text_auto_186"> выбрано</string>
+
+    <string name="text_auto_187">Удалить аккаунт?</string>
+    <string name="text_auto_188">Все ваши данные (поездки, точки, фото, настройки) будут удалены безвозвратно. Аккаунт будет удалён. Продолжить?</string>
+    <string name="text_auto_189">Да, удалить</string>
+    <string name="text_auto_190">Отмена</string>
+    <string name="text_auto_191">Не указано</string>
+    <string name="text_auto_192">Переименовать поездку</string>
+
+    <string name="text_91">Версия 1.0</string>
+    <string name="text_92">О себе</string>
+    <string name="text_93">Не указано</string>
+    <string name="ok">OK</string>
+    <string name="text_94">Расскажите о себе</string>
+    <string name="text_95">Эти данные помогут ИИ лучше понимать ваши интересы и давать персональные рекомендации.</string>
+    <string name="text_96">Например: люблю трекинг и пробовать местную кухню...</string>
+    <string name="text_97">Очистить</string>
+    <string name="text_98">Сохранить</string>
+
 </resources>

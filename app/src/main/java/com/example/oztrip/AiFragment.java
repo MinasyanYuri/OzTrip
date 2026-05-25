@@ -1,5 +1,7 @@
 package com.example.oztrip;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
@@ -11,14 +13,19 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.firebase.auth.FirebaseAuth;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.maplibre.android.camera.CameraUpdateFactory;
 import org.maplibre.android.geometry.LatLng;
 
 import java.util.ArrayList;
@@ -27,6 +34,8 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -43,14 +52,22 @@ public class AiFragment extends Fragment {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private String cachedContext = null;
-    // Лимиты OpenRouter (обновляются после каждого запроса)
     private int remainingRequests = -1;
     private String resetTime = null;
     private int remainingTokens = -1;
+    private String currentLang = "ru";
+    private OkHttpClient httpClient;
 
-    private static final String API_KEY = "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";
-    private static final String API_URL = "https://openrouter.ai/api/v1/chat/completions";
-    private static final String MODEL = "openrouter/free";
+    // OpenRouter (запасной)
+    private static final String OR_API_KEY = "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";
+    private static final String OR_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+    private static final String OR_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+
+    // Groq (основной)
+    private static final String GROQ_API_KEY = "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";   // <-- ВАШ НОВЫЙ КЛЮЧ
+    private static final String GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+    private static final String GROQ_MODEL = "llama-3.3-70b-versatile";
+
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     @Nullable
@@ -69,8 +86,28 @@ public class AiFragment extends Fragment {
         chatRecyclerView.setItemViewCacheSize(20);
         chatRecyclerView.setAdapter(chatAdapter);
 
-        // Приветствие
+        chatAdapter.setOnLocationClickListener((lat, lng) -> {
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity != null && activity.getLiquidNav() != null) {
+                activity.getLiquidNav().setSelectedIndex(0);
+            }
+            if (activity != null && activity.mapLibre != null) {
+                activity.mapLibre.animateCamera(
+                        CameraUpdateFactory.newLatLngZoom(new LatLng(lat, lng), 15), 1000);
+            }
+        });
+
         chatAdapter.addMessage(new ChatMessage(getString(R.string.text_auto_1), false));
+
+        if (getActivity() != null) {
+            SharedPreferences prefs = getActivity().getSharedPreferences("OzTripPrefs", Context.MODE_PRIVATE);
+            currentLang = prefs.getString("language", "ru");
+        }
+
+        httpClient = new OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
+                .build();
 
         sendButton.setOnClickListener(v -> sendMessage());
         messageInput.setOnEditorActionListener((v, actionId, event) -> {
@@ -84,16 +121,10 @@ public class AiFragment extends Fragment {
         return root;
     }
 
-    /** Определяет, запрашивает ли пользователь свои персональные данные */
-    private boolean isDataRequest(String message) {
-        String lower = message.toLowerCase();
-        return lower.contains(getString(R.string.text_auto_2)) || lower.contains(getString(R.string.text_auto_3)) || lower.contains(getString(R.string.text_auto_4))
-                || lower.contains(getString(R.string.text_auto_5)) || lower.contains(getString(R.string.text_auto_6)) || lower.contains(getString(R.string.text_auto_7))
-                || lower.contains(getString(R.string.text_auto_8)) || lower.contains(getString(R.string.text_auto_9));
-    }
     public void clearCachedContext() {
         cachedContext = null;
     }
+
     private void sendMessage() {
         String text = messageInput.getText().toString().trim();
         if (TextUtils.isEmpty(text)) return;
@@ -104,260 +135,342 @@ public class AiFragment extends Fragment {
         ChatMessage typing = new ChatMessage("...", false);
         chatAdapter.addMessage(typing);
 
-        // Проверяем, нужна ли погода, и если да — получим её перед отправкой
         fetchWeatherIfNeeded(text, () -> {
-            // Контекст с личными данными (только по запросу)
-            if (isDataRequest(text) && (cachedContext == null || cachedContext.isEmpty())) {
-                cachedContext = buildFullContext();
-            } else if (!isDataRequest(text)) {
-                cachedContext = "";
-            }
+            cachedContext = buildFullContext();
+            String systemPrompt = buildSystemPrompt();
 
-            // Системный промпт (как выше)
-            String systemPrompt =
-                    getString(R.string.text_auto_10) +
-                            getString(R.string.text_auto_11) +
-                            getString(R.string.text_auto_12) +
-                            getString(R.string.text_auto_13) +
-                            getString(R.string.text_auto_14) +
-                            getString(R.string.text_auto_15);
-
-            if (!cachedContext.isEmpty()) {
-                systemPrompt += getString(R.string.text_auto_19) + cachedContext + "\n";
-            }
-
-            // Добавляем погоду, если она была получена
-            if (cachedWeather != null) {
-                systemPrompt += getString(R.string.text_auto_20) + cachedWeather + "\n";
-            }
-
-            // Информация о лимитах
-            if (remainingRequests >= 0) {
-                systemPrompt += String.format(getString(R.string.text_auto_21),
-                        remainingRequests, resetTime != null ? resetTime : getString(R.string.text_auto_22), remainingTokens);
-            } else {
-                systemPrompt += getString(R.string.text_auto_23);
-            }
-
-            String fullUserMessage = systemPrompt + getString(R.string.text_auto_24) + text;
-            fetchAIResponse(fullUserMessage);
+            // 1. Сначала Groq
+            sendGroqRequest(systemPrompt, text, groqResponse -> {
+                if (!groqResponse.startsWith("ERROR:")) {
+                    displayResponse(groqResponse, typing);
+                } else {
+                    // 2. Groq недоступен → OpenRouter
+                    sendOpenRouterRequest(systemPrompt, text, orResponse -> {
+                        if (!orResponse.startsWith("ERROR:")) {
+                            displayResponse("(OpenRouter) " + orResponse, typing);
+                        } else {
+                            displayResponse("Извините, сервис временно недоступен. Попробуйте позже.", typing);
+                        }
+                    });
+                }
+            });
         });
     }
 
-    /**
-     * Собирает всю информацию из MainActivity в текстовый контекст.
-     */
-    private String buildFullContext() {
-        MainActivity activity = (MainActivity) getActivity();
-        if (activity == null) return getString(R.string.text_auto_25);
-
-        StringBuilder ctx = new StringBuilder();
-
-        // 1. Текущее местоположение
-        Location loc = activity.getCurrentLocation();
-        if (loc != null) {
-            ctx.append(String.format(Locale.US,
-                    getString(R.string.text_auto_26),
-                    loc.getLatitude(), loc.getLongitude()));
-        } else {
-            ctx.append(getString(R.string.text_auto_27));
-        }
-
-        // 2. Список поездок (веток)
-        List<TravelList> allLists = activity.getAllTravelLists();
-        if (allLists != null && !allLists.isEmpty()) {
-            ctx.append(getString(R.string.text_auto_28));
-            for (int i = 0; i < allLists.size(); i++) {
-                TravelList list = allLists.get(i);
-                ctx.append(i + 1).append(". ").append(list.name);
-                ctx.append(getString(R.string.text_auto_29)).append(list.locations != null ? list.locations.size() : 0);
-                ctx.append(getString(R.string.text_auto_30)).append(list.pathPoints != null ? list.pathPoints.size() : 0).append(")\n");
-            }
-        }
-
-        // 3. Активная поездка и её точки
-        TravelList active = activity.getCurrentActiveList();
-        if (active != null) {
-            ctx.append(getString(R.string.text_auto_31)).append(active.name).append(" ===\n");
-            // Точки
-            List<SavedLocation> locations = active.locations;
-            if (locations != null && !locations.isEmpty()) {
-                ctx.append(getString(R.string.text_auto_32));
-                for (int i = 0; i < locations.size(); i++) {
-                    SavedLocation sl = locations.get(i);
-                    ctx.append("  ").append(i + 1).append(". ");
-                    ctx.append(sl.customName.isEmpty() ? getString(R.string.text_auto_33) : sl.customName);
-                    ctx.append(getString(R.string.text_auto_34)).append(sl.level).append("]");
-                    ctx.append(getString(R.string.text_auto_35)).append(String.format(Locale.US, "%.5f, %.5f", sl.latLng.getLatitude(), sl.latLng.getLongitude()));
-                    if (!sl.note.isEmpty()) ctx.append(getString(R.string.text_auto_36)).append(sl.note).append("\"");
-                    if (sl.date != null && !sl.date.isEmpty()) ctx.append(getString(R.string.text_auto_37)).append(sl.date);
-                    ctx.append(getString(R.string.text_auto_38)).append(sl.rating);
-                    ctx.append(getString(R.string.text_auto_39)).append(sl.photoPaths != null ? sl.photoPaths.size() : 0);
-                    ctx.append("\n");
-                }
-            }
-            // Маршрут
-            List<LatLng> path = active.pathPoints;
-            if (path != null && path.size() > 1) {
-                ctx.append(getString(R.string.text_auto_40)).append(path.size()).append("): ");
-                // Первую и последнюю точку для примера
-                LatLng first = path.get(0);
-                LatLng last = path.get(path.size() - 1);
-                ctx.append(String.format(Locale.US, getString(R.string.text_auto_41),
-                        first.getLatitude(), first.getLongitude(),
-                        last.getLatitude(), last.getLongitude()));
-            }
-        }
-
-        return ctx.toString();
+    private void displayResponse(String text, ChatMessage typing) {
+        mainHandler.post(() -> {
+            if (!isAdded()) return;
+            chatAdapter.replaceLastMessage(new ChatMessage(text, false));
+        });
     }
-    private void fetchWeatherIfNeeded(String userMessage, Runnable onReady) {
-        // Простая проверка: если пользователь упоминает погоду
-        String lower = userMessage.toLowerCase();
-        if (lower.contains(getString(R.string.text_auto_42)) || lower.contains(getString(R.string.text_auto_43)) || lower.contains(getString(R.string.text_auto_44))
-                || lower.contains(getString(R.string.text_auto_45)) || lower.contains(getString(R.string.text_auto_46)) || lower.contains(getString(R.string.text_auto_47))) {
 
-            MainActivity activity = (MainActivity) getActivity();
-            if (activity == null) {
-                onReady.run();
-                return;
-            }
-            Location loc = activity.getCurrentLocation();
-            if (loc == null) {
-                cachedWeather = getString(R.string.text_auto_48);
-                onReady.run();
-                return;
-            }
-            // Делаем запрос к Open-Meteo
-            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + loc.getLatitude() +
-                    "&longitude=" + loc.getLongitude() + "&current_weather=true";
+    private String buildSystemPrompt() {
+        String prompt = "Ты — OzTrip AI, персональный гид пользователя по Армении. "
+                + "Ты видишь все его поездки, сохранённые точки, заметки, рейтинги и местоположение. "
+                + "Ты можешь предлагать любые места, даже если их нет в сохранённых данных. "
+                + "ВСЕГДА указывай координаты в формате [coord:широта,долгота] (без пробелов). "
+                + "Ты можешь управлять приложением через команды:\n"
+                + "- создать поездку: [action:create_trip;Название]\n"
+                + "- переименовать поездку: [action:rename_trip;старое_название;новое_название]\n"
+                + "- удалить поездку: [action:delete_trip;Название]\n"
+                + "- добавить точку в активную поездку: [action:add_point;широта;долгота;название]\n"
+                + "- построить маршрут из точек: [action:build_route;широта1,долгота1;широта2,долгота2;...]\n"
+                + "Команды вставляй прямо в ответ. Пример:\n"
+                + "Я создал поездку «Отдых» [coord:40.5515,44.9884]. [action:create_trip;Отдых]\n"
+                + "Будь дружелюбным, кратким и полезным. Отвечай на языке вопроса.\n\n";
 
-            executor.execute(() -> {
-                try {
-                    OkHttpClient client = new OkHttpClient.Builder()
-                            .connectTimeout(10, TimeUnit.SECONDS)
-                            .readTimeout(10, TimeUnit.SECONDS)
-                            .build();
-                    Request request = new Request.Builder().url(url).build();
-                    Response response = client.newCall(request).execute();
-                    if (response.isSuccessful()) {
-                        JSONObject json = new JSONObject(response.body().string());
-                        JSONObject current = json.getJSONObject("current_weather");
-                        double temp = current.getDouble("temperature");
-                        double wind = current.getDouble("windspeed");
-                        int weatherCode = current.getInt("weathercode");
-                        String desc = getWeatherDescription(weatherCode);
-                        cachedWeather = String.format(Locale.US,
-                                getString(R.string.text_auto_49), temp, wind, desc);
-                    } else {
-                        cachedWeather = getString(R.string.text_auto_50);
+        if (cachedWeather != null) prompt += "Погода: " + cachedWeather + "\n";
+        if (cachedContext != null && !cachedContext.isEmpty())
+            prompt += "Данные пользователя:\n" + cachedContext + "\n";
+        if (remainingRequests >= 0)
+            prompt += String.format("Лимиты: запросов %d, сброс %s, токенов %d.\n",
+                    remainingRequests, resetTime != null ? resetTime : "неизвестно", remainingTokens);
+        return prompt;
+    }
+
+    // Безопасная обработка команд (ошибки не ломают ответ)
+    private String processActions(String response) {
+        if (response == null) return "";
+        try {
+            Pattern actionPattern = Pattern.compile("\\[action:([^\\]]+)\\]");
+            Matcher matcher = actionPattern.matcher(response);
+            boolean anyAction = false;
+            while (matcher.find()) {
+                String command = matcher.group(1);
+                anyAction = true;
+                // Выполняем команду в главном потоке
+                mainHandler.post(() -> {
+                    try {
+                        executeAction(command);
+                    } catch (Exception e) {
+                        Log.e("AiAction", "Ошибка UI-команды: " + command, e);
                     }
-                } catch (Exception e) {
-                    cachedWeather = getString(R.string.text_auto_51);
-                }
-                mainHandler.post(onReady);
-            });
-        } else {
-            // Погода не нужна, убираем кэш
-            cachedWeather = null;
-            onReady.run();
+                });
+            }
+            if (anyAction) {
+                response = response.replaceAll("\\[action:[^\\]]+\\]", "").trim();
+            }
+        } catch (Exception e) {
+            Log.e("AiAction", "Ошибка в processActions", e);
+        }
+        return response;
+    }
+
+    private void executeAction(String command) {
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity == null) return;
+        String[] parts = command.split(";");
+        if (parts.length == 0) return;
+        String actionType = parts[0].trim();
+
+        // Переключаемся на карту, только если действие выполнено успешно
+        boolean success = false;
+
+        try {
+            switch (actionType) {
+                case "create_trip":
+                    if (parts.length > 1) { activity.createTrip(parts[1].trim()); success = true; }
+                    break;
+                case "rename_trip":
+                    if (parts.length > 2) { activity.renameTrip(parts[1].trim(), parts[2].trim()); success = true; }
+                    break;
+                case "delete_trip":
+                    if (parts.length > 1) { activity.deleteTrip(parts[1].trim()); success = true; }
+                    break;
+                case "add_point":
+                    if (parts.length > 3) {
+                        double lat = Double.parseDouble(parts[1].trim());
+                        double lng = Double.parseDouble(parts[2].trim());
+                        activity.addPoint(lat, lng, parts[3].trim());
+                        success = true;
+                    }
+                    break;
+                case "build_route":
+                    if (parts.length > 1) {
+                        String[] coords = parts[1].split(",");
+                        if (coords.length % 2 == 0) {
+                            List<LatLng> points = new ArrayList<>();
+                            for (int i = 0; i < coords.length; i += 2) {
+                                double lat = Double.parseDouble(coords[i].trim());
+                                double lng = Double.parseDouble(coords[i + 1].trim());
+                                points.add(new LatLng(lat, lng));
+                            }
+                            if (points.size() >= 2) { activity.buildRoute(points); success = true; }
+                        }
+                    }
+                    break;
+            }
+        } catch (Exception e) {
+            Log.e("AiAction", "Ошибка выполнения команды: " + command, e);
+        }
+
+        if (success) {
+            // После успешного действия переключаемся на карту
+            if (activity.getLiquidNav() != null) {
+                activity.getLiquidNav().setSelectedIndex(0);
+            }
+            activity.invalidateAiContext();
         }
     }
-    private String getWeatherDescription(int code) {
-        if (code <= 1) return getString(R.string.text_auto_52);
-        if (code <= 3) return getString(R.string.text_auto_53);
-        if (code <= 48) return getString(R.string.text_auto_54);
-        if (code <= 57) return getString(R.string.text_auto_55);
-        if (code <= 67) return getString(R.string.text_auto_56);
-        if (code <= 77) return getString(R.string.text_auto_57);
-        if (code <= 82) return getString(R.string.text_auto_58);
-        if (code <= 86) return getString(R.string.text_auto_59);
-        return getString(R.string.text_auto_60);
-    }
-    private void fetchAIResponse(String fullUserMessage) {
+
+    // ==================== Groq ====================
+    private void sendGroqRequest(String systemPrompt, String userText, OnAIResponseListener listener) {
         executor.execute(() -> {
             try {
-                OkHttpClient client = new OkHttpClient.Builder()
-                        .connectTimeout(30, TimeUnit.SECONDS)
-                        .readTimeout(30, TimeUnit.SECONDS)
-                        .build();
-
                 JSONObject payload = new JSONObject();
-                payload.put("model", MODEL);
-
+                payload.put("model", GROQ_MODEL);
                 JSONArray messages = new JSONArray();
-                JSONObject userMsg = new JSONObject();
-                userMsg.put("role", "user");
-                userMsg.put("content", fullUserMessage);
-                messages.put(userMsg);
+                messages.put(new JSONObject().put("role", "system").put("content", systemPrompt));
+                messages.put(new JSONObject().put("role", "user").put("content", userText));
                 payload.put("messages", messages);
 
                 RequestBody body = RequestBody.create(payload.toString(), JSON);
                 Request request = new Request.Builder()
-                        .url(API_URL)
+                        .url(GROQ_API_URL)
                         .post(body)
-                        .addHeader("Authorization", "Bearer " + API_KEY)
+                        .addHeader("Authorization", "Bearer " + GROQ_API_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .build();
+
+                Response response = httpClient.newCall(request).execute();
+                String respBody = response.body().string();
+
+                if (response.isSuccessful()) {
+                    JSONObject obj = new JSONObject(respBody);
+                    String text = obj.getJSONArray("choices").getJSONObject(0)
+                            .getJSONObject("message").getString("content");
+                    String finalText = processActions(text);
+                    mainHandler.post(() -> listener.onResponse(finalText));
+                } else {
+                    mainHandler.post(() -> listener.onResponse("ERROR: Groq " + respBody));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> listener.onResponse("ERROR: " + e.getMessage()));
+            }
+        });
+    }
+
+    // ==================== OpenRouter (запасной) ====================
+    private void sendOpenRouterRequest(String systemPrompt, String userText, OnAIResponseListener listener) {
+        executor.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("model", OR_MODEL);
+                JSONArray messages = new JSONArray();
+                messages.put(new JSONObject().put("role", "system").put("content", systemPrompt));
+                messages.put(new JSONObject().put("role", "user").put("content", userText));
+                payload.put("messages", messages);
+
+                RequestBody body = RequestBody.create(payload.toString(), JSON);
+                Request request = new Request.Builder()
+                        .url(OR_API_URL)
+                        .post(body)
+                        .addHeader("Authorization", "Bearer " + OR_API_KEY)
                         .addHeader("Content-Type", "application/json")
                         .addHeader("HTTP-Referer", "https://oztrip.app")
                         .addHeader("X-Title", "OzTrip")
                         .build();
 
-                Response response = client.newCall(request).execute();
-                String responseBody = response.body().string();
-                Log.d("OzTrip_AI", "HTTP: " + response.code() + " | Body: " + responseBody);
+                Response response = httpClient.newCall(request).execute();
+                String respBody = response.body().string();
 
-                // Извлекаем заголовки лимитов
-                String remainReq = response.header("x-ratelimit-requests-remaining");
-                String reset = response.header("x-ratelimit-requests-reset");
-                String remainTok = response.header("x-ratelimit-tokens-remaining");
-
-                if (remainReq != null) {
-                    Log.d("OzTrip_Limits", "Requests remaining: " + remainReq + ", reset at: " + reset +
-                            ", tokens remaining: " + remainTok);
-                } else {
-                    Log.d("OzTrip_Limits", "No rate-limit headers in response. Possibly free tier without headers.");
-                }
-
-                // Сохраняем лимиты в поля класса
-                remainingRequests = remainReq != null ? Integer.parseInt(remainReq) : -1;
-                resetTime = reset;
-                remainingTokens = remainTok != null ? Integer.parseInt(remainTok) : -1;
-
-                // Обрабатываем ответ
-                String aiText;
                 if (response.isSuccessful()) {
-                    aiText = parseResponse(responseBody);
+                    JSONObject obj = new JSONObject(respBody);
+                    String text = obj.getJSONArray("choices").getJSONObject(0)
+                            .getJSONObject("message").getString("content");
+                    String finalText = processActions(text);
+                    mainHandler.post(() -> listener.onResponse(finalText));
                 } else {
-                    try {
-                        JSONObject err = new JSONObject(responseBody);
-                        aiText = getString(R.string.text_auto_61) + err.getJSONObject("error").optString("message", getString(R.string.text_auto_22));
-                    } catch (Exception e) {
-                        aiText = getString(R.string.text_auto_62) + response.code();
-                    }
+                    mainHandler.post(() -> listener.onResponse("ERROR: OR " + respBody));
                 }
-                String finalAiText = aiText;
-                mainHandler.post(() -> {
-                    if (!isAdded()) return;
-                    chatAdapter.replaceLastMessage(new ChatMessage(finalAiText, false));
-                });
             } catch (Exception e) {
-                Log.e("OzTrip_AI", "Request error", e);
-                mainHandler.post(() -> {
-                    if (!isAdded()) return;
-                    chatAdapter.replaceLastMessage(new ChatMessage(getString(R.string.text_auto_63) + e.getMessage(), false));
-                });
+                mainHandler.post(() -> listener.onResponse("ERROR: " + e.getMessage()));
             }
         });
     }
 
-    private String parseResponse(String json) {
-        try {
-            JSONObject obj = new JSONObject(json);
-            JSONArray choices = obj.getJSONArray("choices");
-            return choices.getJSONObject(0).getJSONObject("message").getString("content");
-        } catch (Exception e) {
-            return getString(R.string.text_auto_64);
+    // ==================== Контекст (все поездки) ====================
+    private String buildFullContext() {
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity == null) return getString(R.string.text_auto_25);
+
+        StringBuilder ctx = new StringBuilder();
+        SharedPreferences prefs = getActivity().getSharedPreferences("OzTripPrefs", Context.MODE_PRIVATE);
+        String aboutMe = prefs.getString("about_me", "");
+        if (!aboutMe.isEmpty()) {
+            ctx.append("\nО пользователе: ").append(aboutMe).append("\n");
         }
+
+        boolean isLoggedIn = FirebaseAuth.getInstance().getCurrentUser() != null;
+        ctx.append("Пользователь ").append(isLoggedIn ? "авторизован" : "в гостевом режиме").append(".\n");
+
+        Location loc = activity.getCurrentLocation();
+        if (loc != null) {
+            ctx.append(String.format(Locale.US, getString(R.string.text_auto_26), loc.getLatitude(), loc.getLongitude()));
+        } else {
+            ctx.append(getString(R.string.text_auto_27));
+        }
+
+        List<TravelList> allLists = activity.getAllTravelLists();
+        if (allLists != null && !allLists.isEmpty()) {
+            ctx.append("\n=== ВСЕ ПОЕЗДКИ ===\n");
+            TravelList active = activity.getCurrentActiveList();
+
+            for (int t = 0; t < allLists.size(); t++) {
+                TravelList list = allLists.get(t);
+                ctx.append(t + 1).append(". ").append(list.name);
+                ctx.append(" (локаций: ").append(list.locations != null ? list.locations.size() : 0);
+                ctx.append(", точек пути: ").append(list.pathPoints != null ? list.pathPoints.size() : 0).append(")");
+
+                if (list == active) ctx.append(" ← АКТИВНАЯ\n");
+                else ctx.append("\n");
+
+                List<SavedLocation> locations = list.locations;
+                if (locations != null && !locations.isEmpty()) {
+                    int maxPoints = (list == active) ? locations.size() : Math.min(locations.size(), 3);
+                    ctx.append("   Точки");
+                    if (maxPoints < locations.size()) ctx.append(" (первые ").append(maxPoints).append(" из ").append(locations.size()).append(")");
+                    ctx.append(":\n");
+
+                    for (int i = 0; i < maxPoints; i++) {
+                        SavedLocation sl = locations.get(i);
+                        ctx.append("     ").append(i + 1).append(". ");
+                        ctx.append(sl.customName.isEmpty() ? getString(R.string.text_auto_33) : sl.customName);
+                        ctx.append(" [уровень ").append(sl.level).append("]");
+                        ctx.append(" координаты: [coord:").append(String.format(Locale.US, "%.5f,%.5f]", sl.latLng.getLatitude(), sl.latLng.getLongitude()));
+                        if (!sl.note.isEmpty()) ctx.append(", заметка: \"").append(sl.note).append("\"");
+                        if (sl.date != null && !sl.date.isEmpty()) ctx.append(", дата: ").append(sl.date);
+                        ctx.append(", рейтинг: ").append(sl.rating);
+                        ctx.append(" фото: ").append(sl.photoPaths != null ? sl.photoPaths.size() : 0);
+                        ctx.append("\n");
+                    }
+                }
+
+                List<LatLng> path = list.pathPoints;
+                if (path != null && path.size() > 1) {
+                    ctx.append("   Маршрут: ").append(path.size()).append(" точек, ");
+                    LatLng first = path.get(0);
+                    LatLng last = path.get(path.size() - 1);
+                    ctx.append(String.format(Locale.US, "от %.5f,%.5f до %.5f,%.5f\n", first.getLatitude(), first.getLongitude(), last.getLatitude(), last.getLongitude()));
+                }
+            }
+        }
+
+        return ctx.toString();
+    }
+
+    private void fetchWeatherIfNeeded(String userMessage, Runnable onReady) {
+        String lower = userMessage.toLowerCase();
+        if (lower.contains("погод") || lower.contains("температ") || lower.contains("weather")) {
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity == null) { onReady.run(); return; }
+            Location loc = activity.getCurrentLocation();
+            if (loc == null) {
+                cachedWeather = "Местоположение неизвестно, погода недоступна.";
+                onReady.run();
+                return;
+            }
+            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + loc.getLatitude() + "&longitude=" + loc.getLongitude() + "&current_weather=true";
+            executor.execute(() -> {
+                try {
+                    Request request = new Request.Builder().url(url).build();
+                    Response response = httpClient.newCall(request).execute();
+                    if (response.isSuccessful()) {
+                        JSONObject json = new JSONObject(response.body().string());
+                        JSONObject current = json.getJSONObject("current_weather");
+                        double temp = current.getDouble("temperature");
+                        double wind = current.getDouble("windspeed");
+                        int code = current.getInt("weathercode");
+                        String desc = getWeatherDescription(code);
+                        cachedWeather = String.format(Locale.US, "%.0f°C, ветер %.1f км/ч, %s.", temp, wind, desc);
+                    } else {
+                        cachedWeather = "Не удалось получить погоду.";
+                    }
+                } catch (Exception e) {
+                    cachedWeather = "Ошибка получения погоды.";
+                }
+                mainHandler.post(onReady);
+            });
+        } else {
+            cachedWeather = null;
+            onReady.run();
+        }
+    }
+
+    private String getWeatherDescription(int code) {
+        if (code <= 1) return "ясно";
+        if (code <= 3) return "облачно";
+        if (code <= 48) return "туман";
+        if (code <= 57) return "морось";
+        if (code <= 67) return "дождь";
+        if (code <= 77) return "снег";
+        if (code <= 82) return "ливень";
+        if (code <= 86) return "снегопад";
+        return "гроза";
+    }
+
+    interface OnAIResponseListener {
+        void onResponse(String text);
     }
 
     @Override

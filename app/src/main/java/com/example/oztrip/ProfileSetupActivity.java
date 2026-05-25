@@ -28,7 +28,7 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 
-public class ProfileSetupActivity extends AppCompatActivity {
+public class ProfileSetupActivity extends BaseActivity  {
     private MaterialButton btnSave;
     private EditText etUsername, etName;
     // Убираем TextInputLayout, так как их больше нет в XML

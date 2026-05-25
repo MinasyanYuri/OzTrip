@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?android:colorBackground">
+
+    <!-- Верхняя панель (LinearLayout) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="8dp"
+        android:background="?attr/colorSurface"
+        android:elevation="4dp">
+
+        <!-- Кнопка "назад" -->
+        <ImageView
+            android:id="@+id/btnBackAbout"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_back_luxury"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginEnd="4dp" />
+
+        <!-- Заголовок занимает всё доступное место, может быть в 2-3 строки -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/text_94"
+            android:textColor="?android:textColorPrimary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+        <!-- Иконка очистки (крестик) -->
+        <ImageView
+            android:id="@+id/btnClearAbout"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_trash_premium"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/text_97" />
+
+        <!-- Иконка сохранения (галочка) -->
+        <ImageView
+            android:id="@+id/btnSaveAbout"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_done"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/text_98" />
+    </LinearLayout>
+
+    <!-- Поле ввода -->
+    <EditText
+        android:id="@+id/etAboutMe"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:hint="@string/text_96"
+        android:textColor="?android:textColorPrimary"
+        android:textColorHint="?android:textColorSecondary"
+        android:background="@android:color/transparent"
+        android:padding="20dp"
+        android:gravity="top|start"
+        android:inputType="textMultiLine|textCapSentences"
+        android:maxLength="2000"
+        android:scrollbars="vertical" />
+</LinearLayout>

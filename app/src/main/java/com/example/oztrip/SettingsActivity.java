@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -26,12 +27,14 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.io.File;
 import java.util.Locale;
 
-public class SettingsActivity extends AppCompatActivity {
+public class SettingsActivity extends BaseActivity  {
 
     private TextView tvWelcome, tvUserNick, tvInitials;
     private ImageView ivAvatar;
@@ -46,6 +49,8 @@ public class SettingsActivity extends AppCompatActivity {
     private TextView tvCurrentLanguage;
     private SharedPreferences prefs;
 
+    private TextView tvAboutMePreview;
+    private String aboutMeText = "";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -81,7 +86,6 @@ public class SettingsActivity extends AppCompatActivity {
         btnLogout = findViewById(R.id.btnLogoutSettings);
 
         switchDarkTheme = findViewById(R.id.switchDarkTheme);
-        tvCurrentUnit = findViewById(R.id.tvCurrentUnit);
         tvCurrentLanguage = findViewById(R.id.tvCurrentLanguage);
 
         // Настройка интерфейса для гостя
@@ -97,6 +101,10 @@ public class SettingsActivity extends AppCompatActivity {
         } else {
             btnLogout.setText(getString(R.string.text_auto_168));
         }
+
+        tvAboutMePreview = findViewById(R.id.tvAboutMePreview);
+        aboutMeText = prefs.getString("about_me", "");
+        updateAboutMePreview();
 
         // Кнопка Изменить профиль
         if (btnEditProfile.getVisibility() == View.VISIBLE) {
@@ -119,6 +127,27 @@ public class SettingsActivity extends AppCompatActivity {
             finish();
         });
 
+        findViewById(R.id.itemDeleteData).setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.text_auto_187)
+                    .setMessage(R.string.text_auto_188)
+                    .setPositiveButton(R.string.text_auto_189, (dialog, which) -> {
+                        // Открываем диалог подтверждения паролем
+                        showDeleteAccountDialog();
+                    })
+                    .setNegativeButton(R.string.text_auto_190, null)
+                    .show();
+        });
+
+        findViewById(R.id.itemAboutMe).setOnClickListener(v -> {
+            startActivity(new Intent(SettingsActivity.this, AboutMeActivity.class));
+        });
+        findViewById(R.id.itemContact).setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_SENDTO);
+            intent.setData(Uri.parse("mailto:minasyanyuri910@gmail.com"));
+            intent.putExtra(Intent.EXTRA_SUBJECT, "OzTrip feedback");
+            startActivity(Intent.createChooser(intent, "Написать"));
+        });
         // Кнопка Назад
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
 
@@ -135,21 +164,7 @@ public class SettingsActivity extends AppCompatActivity {
             );
         });
 
-        // 2. Единицы измерения
-        String unit = prefs.getString("units", "km");
-        tvCurrentUnit.setText(unit.equals("km") ? getString(R.string.text_auto_169) : getString(R.string.text_auto_170));
-        findViewById(R.id.itemUnits).setOnClickListener(v -> {
-            String[] options = {getString(R.string.text_auto_171), getString(R.string.text_auto_170)};
-            new AlertDialog.Builder(this)
-                    .setTitle(getString(R.string.text_auto_172))
-                    .setSingleChoiceItems(options, unit.equals("km") ? 0 : 1, (dialog, which) -> {
-                        String chosen = which == 0 ? "km" : "mi";
-                        prefs.edit().putString("units", chosen).apply();
-                        tvCurrentUnit.setText(which == 0 ? getString(R.string.text_auto_169) : getString(R.string.text_auto_170));
-                        dialog.dismiss();
-                    })
-                    .show();
-        });
+
 
         // Внутри SettingsActivity, в методе onCreate, замените блок getString(R.string.text_auto_173) на этот:
 
@@ -180,15 +195,122 @@ public class SettingsActivity extends AppCompatActivity {
 // getString(R.string.text_auto_171) и getString(R.string.text_auto_170) лучше заменить на ресурсы text_89, text_90, но сейчас не критично.
 
         // 5. О приложении
+// 5. О приложении
         findViewById(R.id.itemAbout).setOnClickListener(v -> {
-            new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
-                    .setTitle("OzTrip")
-                    .setMessage(getString(R.string.text_auto_175))
-                    .setPositiveButton("OK", null)
-                    .show();
+            View dialogView = getLayoutInflater().inflate(R.layout.dialog_about, null);
+            AlertDialog dialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                    .setView(dialogView)
+                    .create();
+
+            dialogView.findViewById(R.id.btnOkAbout).setOnClickListener(btn -> dialog.dismiss());
+
+            dialog.show();
         });
     }
 
+    private void updateAboutMePreview() {
+        if (tvAboutMePreview != null) {
+            if (aboutMeText.isEmpty()) {
+                tvAboutMePreview.setText(getString(R.string.text_auto_191));
+            } else {
+                tvAboutMePreview.setText(aboutMeText.length() > 30 ? aboutMeText.substring(0, 30) + "..." : aboutMeText);
+            }
+        }
+    }
+    private void showDeleteAccountDialog() {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_confirm_auth, null);
+        EditText etPass = dialogView.findViewById(R.id.etConfirmPass);
+        MaterialButton btnConfirm = dialogView.findViewById(R.id.btnConfirmAuth);
+
+        // Меняем заголовки на «Удаление аккаунта»
+        TextView tvTitle = dialogView.findViewById(R.id.tvDialogTitle);
+        if (tvTitle != null) {
+            tvTitle.setText("Удаление аккаунта");
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.PremiumDialogTheme)
+                .setView(dialogView)
+                .create();
+        dialog.show();
+
+        btnConfirm.setOnClickListener(btn -> {
+            String password = etPass.getText().toString().trim();
+            if (password.isEmpty()) {
+                etPass.setError("Введите пароль");
+                return;
+            }
+
+            btnConfirm.setEnabled(false);
+
+            // 1. Повторно аутентифицируем пользователя
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            if (user == null || user.getEmail() == null) {
+                Toast.makeText(this, "Ошибка авторизации", Toast.LENGTH_SHORT).show();
+                btnConfirm.setEnabled(true);
+                return;
+            }
+
+            AuthCredential credential = EmailAuthProvider.getCredential(user.getEmail(), password);
+            user.reauthenticate(credential)
+                    .addOnSuccessListener(aVoid -> {
+                        // 2. Удаляем все данные из Firestore
+                        if (uid != null) {
+                            // Удаляем профиль
+                            db.collection("users").document(uid).delete();
+
+                            // Удаляем все поездки
+                            db.collection("travel_lists")
+                                    .whereEqualTo("userId", uid)
+                                    .get()
+                                    .addOnSuccessListener(querySnapshot -> {
+                                        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                                            doc.getReference().delete();
+                                        }
+                                    });
+                        }
+
+                        // 3. Удаляем локальные фото
+                        deleteAllPhotos();
+
+                        // 4. Удаляем аккаунт Firebase Auth
+                        user.delete()
+                                .addOnSuccessListener(unused -> {
+                                    // 5. Полностью очищаем SharedPreferences
+                                    prefs.edit().clear().apply();
+                                    deleteCache();
+
+                                    Toast.makeText(this, "Аккаунт удалён", Toast.LENGTH_SHORT).show();
+                                    dialog.dismiss();
+
+                                    // Возвращаемся на экран регистрации
+                                    Intent intent = new Intent(SettingsActivity.this, RegisterActivity.class);
+                                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                                    startActivity(intent);
+                                    finish();
+                                })
+                                .addOnFailureListener(e -> {
+                                    btnConfirm.setEnabled(true);
+                                    Toast.makeText(this, "Ошибка удаления аккаунта: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                });
+                    })
+                    .addOnFailureListener(e -> {
+                        btnConfirm.setEnabled(true);
+                        etPass.setError("Неверный пароль");
+                    });
+        });
+    }
+
+    private void deleteAllPhotos() {
+        File photoDir = new File(getFilesDir(), "photos");
+        if (photoDir.exists() && photoDir.isDirectory()) {
+            File[] files = photoDir.listFiles();
+            if (files != null) {
+                for (File child : files) {
+                    child.delete();
+                }
+            }
+        }
+    }
     // Установка новой локали
     private void setLocale(String lang) {
         Locale locale = new Locale(lang);
@@ -282,6 +404,8 @@ public class SettingsActivity extends AppCompatActivity {
         if (uid != null) {
             loadUserProfile();
         }
+        aboutMeText = prefs.getString("about_me", "");
+        updateAboutMePreview();
     }
 
     private void loadUserProfile() {

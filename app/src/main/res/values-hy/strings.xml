@@ -9,7 +9,7 @@
     <string name="text_6">ՊՐՈՖԻԼ</string>
     <string name="text_7">Օգտատիրոջ անունը</string>
     <string name="text_8">Մականուն (@)</string>
-    <string name="text_9">Էլ</string>
+    <string name="text_9">Էլ Փոստ</string>
     <string name="text_10">Անվտանգություն (գաղտնաբառ)</string>
     <string name="text_11">ՊԱՀՊԱՆԵՔ ՏՎՅԱԼՆԵՐԸ</string>
     <string name="text_12">քո անունը</string>
@@ -50,7 +50,7 @@
     <string name="text_47">Չափման միավորներ</string>
     <string name="text_48">կմ</string>
     <string name="text_49">Մաքրել քարտեզի քեշը</string>
-    <string name="text_50">Դիմումի մասին</string>
+    <string name="text_50">Ծրագրի մասին</string>
     <string name="text_51">Դուրս եկեք ձեր հաշվից</string>
     <string name="text_52">ԻՄ ՃԱՆԱՊԱՐՀՆԵՐԸ</string>
     <string name="text_53">Ընտրեք</string>
@@ -72,7 +72,7 @@
     <string name="text_69">Որոնել տեղ</string>
     <string name="text_70">Գտեք</string>
     <string name="text_71">Օրինակ՝ Երևան, Աբովյան</string>
-    <string name="text_72">OzAi</string>
+    <string name="text_72">OzAI</string>
     <string name="text_73">Հարցրեք ինձ ճանապարհորդության մասին...</string>
     <string name="text_74">Ուղարկել</string>
     <string name="text_75">Վերանվանել</string>
@@ -89,6 +89,9 @@
     <string name="text_86">Ռուսերեն</string>
     <string name="text_87">Անգլերեն</string>
     <string name="text_88">Հայերեն</string>
+    <string name="text_89">Ջնջել հաշիվը</string>
+    <string name="text_90">Կապվել մշակողի հետ</string>
+
 
     <!-- New auto-extracted strings -->
     <string name="text_auto_1">Բարև՛ Ձեզ: Ես OzTrip AI-ն եմ: Այժմ ես ամեն ինչ գիտեմ Ձեր ճանապարհորդությունների մասին: Հարցրե′ք:</string>
@@ -262,7 +265,7 @@
     <string name="text_auto_172">Միավորներ</string>
     <string name="text_auto_173">Լեզու</string>
     <string name="text_auto_174">Ընտրեք լեզուն</string>
-    <string name="text_auto_175">Տարբերակ 1.0\nՈւղևորությունների օգնական Հայաստանում:\nՄշակող՝ Ձեր անունը:</string>
+    <string name="text_auto_175">Ուղևորությունների օգնական Հայաստանում:\nՄշակող՝ Yuri:</string>
     <string name="text_auto_176">Բարև, </string>
     <string name="text_auto_177">Բարև՛</string>
     <string name="text_auto_178">Բեռնման սխալ</string>
@@ -274,4 +277,23 @@
     <string name="text_auto_184">Ջնջվել է </string>
     <string name="text_auto_185"> ուղևորություն</string>
     <string name="text_auto_186"> ընտրված</string>
+
+    <string name="text_auto_187">Ջնջե՞լ հաշիվը</string>
+    <string name="text_auto_188">Ձեր բոլոր տվյալները (ճանապարհորդություններ, միավորներ, լուսանկարներ, կարգավորումներ) ընդմիշտ կջնջվեն։ Ձեր հաշիվը կջնջվի։ Շարունակե՞լ։</string>
+    <string name="text_auto_189">Այո, ջնջել</string>
+    <string name="text_auto_190">Չեղարկել</string>
+    <string name="text_auto_191">Նշված չէ</string>
+    <string name="text_auto_192">Վերանվանել ուղևորությունը</string>
+
+
+    <string name="text_91">Տարբերակ 1.0</string>
+    <string name="text_92">Իմ մասին</string>
+    <string name="text_93">Նշված չէ</string>
+    <string name="ok">Լավ</string>
+    <string name="text_94">Պատմեք մեզ ձեր մասին</string>
+    <string name="text_95">Այս տվյալները կօգնեն արհեստական ​​բանականությանը ավելի լավ հասկանալ ձեր հետաքրքրությունները և տրամադրել անհատականացված առաջարկություններ։</string>
+    <string name="text_96">Օրինակ՝ Ես սիրում եմ լեռնագնացություն և տեղական խոհանոցի համտեսում...</string>
+    <string name="text_97">Մաքրել</string>
+    <string name="text_98">Պահպանել</string>
+
 </resources>

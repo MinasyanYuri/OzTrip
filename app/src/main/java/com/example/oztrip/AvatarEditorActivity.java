@@ -36,7 +36,7 @@ import java.util.Map;
 import com.cloudinary.android.MediaManager;
 import com.cloudinary.android.callback.ErrorInfo;
 import com.cloudinary.android.callback.UploadCallback;
-public class AvatarEditorActivity extends AppCompatActivity {
+public class AvatarEditorActivity extends BaseActivity  {
 
     private ImageView ivAvatarLarge;
     private MaterialCardView cardAvatarLarge;
@@ -47,17 +47,17 @@ public class AvatarEditorActivity extends AppCompatActivity {
     private ProgressBar pbLoading;
 
     private String name, username, uid;
-    private int selectedColor = Color.parseColor("?android:textColorPrimary");
+    private int selectedColor = Color.parseColor("#212121");
     private int selectedIconRes = 0;
-
     private final int[] palette = {
             Color.parseColor("#cc0000"), Color.parseColor("#FF5252"), Color.parseColor("#FF4081"),
             Color.parseColor("#E040FB"), Color.parseColor("#7C4DFF"), Color.parseColor("#536DFE"),
             Color.parseColor("#448AFF"), Color.parseColor("#40C4FF"), Color.parseColor("#18FFFF"),
             Color.parseColor("#69F0AE"), Color.parseColor("#178700"), Color.parseColor("#B2FF59"),
             Color.parseColor("#EEFF41"), Color.parseColor("#FFD740"), Color.parseColor("#FFAB40"),
-            Color.parseColor("#FF6E40"), Color.parseColor("#BDBDBD"), Color.parseColor("?android:textColorSecondary"),
-            Color.parseColor("?android:textColorPrimary"), Color.parseColor("#5D4037"), Color.parseColor("#8D6E63"),
+            Color.parseColor("#FF6E40"),
+            Color.parseColor("#BDBDBD"), Color.parseColor("#757575"),
+            Color.parseColor("#212121"), Color.parseColor("#5D4037"), Color.parseColor("#8D6E63"),
             Color.parseColor("#FFCCBC")
     };
 
@@ -179,7 +179,7 @@ public class AvatarEditorActivity extends AppCompatActivity {
         if (FirebaseAuth.getInstance().getCurrentUser() == null) {
             // Гость – просто завершаем настройку профиля без загрузки в облако
             Toast.makeText(this, getString(R.string.text_auto_66), Toast.LENGTH_SHORT).show();
-            finishRegistration("initials", "?colorOnPrimary"); // или любой дефолтный цвет
+            finishRegistration("initials", "#FFFFFF"); // или любой дефолтный цвет
             return;
         }
         if (pbLoading != null) pbLoading.setVisibility(View.VISIBLE);
@@ -190,7 +190,7 @@ public class AvatarEditorActivity extends AppCompatActivity {
             // Используем Cloudinary вместо Firebase Storage
             uploadImageToCloudinary(currentImageUri);
         } else if (selectedIconRes != 0) {
-            finishRegistration(String.valueOf(selectedIconRes), "?colorOnPrimary");
+            finishRegistration(String.valueOf(selectedIconRes), "#FFFFFF");
         } else {
             finishRegistration("initials", hexColor);
         }
@@ -210,7 +210,7 @@ public class AvatarEditorActivity extends AppCompatActivity {
                     public void onSuccess(String requestId, java.util.Map resultData) {
                         // Это прямая ссылка на фото, которую мы сохраним в Firestore
                         String imageUrl = (String) resultData.get("secure_url");
-                        finishRegistration(imageUrl, "?colorOnPrimary");
+                        finishRegistration(imageUrl, "#FFFFFF");
                     }
 
                     @Override
@@ -253,7 +253,9 @@ public class AvatarEditorActivity extends AppCompatActivity {
         } else {
             // --- СЦЕНАРИЙ РЕГИСТРАЦИИ (Твой старый код) ---
             userUpdates.put("uid", uid);
-            userUpdates.put("email", getIntent().getStringExtra("user_email"));
+            String email = getIntent().getStringExtra("user_email");
+            if (email == null) email = "";
+            userUpdates.put("email", email);
             userUpdates.put("username", getIntent().getStringExtra("user_username"));
             userUpdates.put("name", getIntent().getStringExtra("user_name"));
 
@@ -262,6 +264,11 @@ public class AvatarEditorActivity extends AppCompatActivity {
                     .addOnSuccessListener(aVoid -> {
                         Intent intent = new Intent(this, MainActivity.class);
                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        // В конце успешного сохранения, перед startActivity(intent)
+                        getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                                .edit()
+                                .putBoolean("registration_complete", true)
+                                .apply();
                         startActivity(intent);
                         finish();
                     });

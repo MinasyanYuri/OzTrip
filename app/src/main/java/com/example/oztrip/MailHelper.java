@@ -1,6 +1,6 @@
 package com.example.oztrip;
 
-import android.content.res.Resources;
+import android.content.Context;
 import android.os.AsyncTask;
 import java.util.Properties;
 import javax.mail.Message;
@@ -16,7 +16,7 @@ public class MailHelper {
     private static final String SENDER_EMAIL = "minasyanyuri910@gmail.com";
     private static final String SENDER_PASSWORD = "qogchhoxqmecmlcg";
 
-    public static void sendSecurityAlert(String userEmail, String type) {
+    public static void sendSecurityAlert(Context context, String userEmail, String type) {
         new AsyncTask<Void, Void, Void>() {
             @Override
             protected Void doInBackground(Void... voids) {
@@ -33,25 +33,23 @@ public class MailHelper {
                 });
 
                 try {
-                    Resources res = Resources.getSystem();
                     Message message = new MimeMessage(session);
                     message.setFrom(new InternetAddress(SENDER_EMAIL));
                     message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(userEmail));
 
-                    String subject = res.getString(R.string.text_auto_96) + (type.equals("login") ? res.getString(R.string.text_auto_97) : res.getString(R.string.text_auto_98));
+                    String subject = context.getString(R.string.text_auto_96) + (type.equals("login") ? context.getString(R.string.text_auto_97) : context.getString(R.string.text_auto_98));
                     String currentTime = new java.text.SimpleDateFormat("HH:mm:ss, dd.MM.yyyy",
                             java.util.Locale.getDefault()).format(new java.util.Date());
 
-                    String body = res.getString(R.string.text_auto_99) + currentTime + ".\n" +
-                            res.getString(R.string.text_auto_100);
+                    String body = context.getString(R.string.text_auto_99) + currentTime + ".\n" +
+                            context.getString(R.string.text_auto_100);
 
                     message.setSubject(subject);
                     message.setText(body);
                     Transport.send(message);
-                    android.util.Log.d("OZTRIP_MAIL", res.getString(R.string.text_auto_101) + userEmail);
+                    android.util.Log.d("OZTRIP_MAIL", context.getString(R.string.text_auto_101) + userEmail);
                 } catch (MessagingException e) {
-                    Resources res = Resources.getSystem();
-                    android.util.Log.e("OZTRIP_MAIL", res.getString(R.string.text_auto_102) + e.getMessage());
+                    android.util.Log.e("OZTRIP_MAIL", context.getString(R.string.text_auto_102) + e.getMessage());
                     e.printStackTrace();
                 }
                 return null;

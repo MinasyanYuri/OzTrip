@@ -86,7 +86,7 @@ import java.util.Locale;
 import android.content.SharedPreferences;
 import android.content.Context;
 
-public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
+public class MainActivity extends BaseActivity  {
 
     private boolean isFirstResume = true;
     private LiquidSegmentedControl liquidNav;
@@ -512,7 +512,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                         // 1. Убедимся, что метка включена и геолокация доступна
 
                         LocationComponent locationComponent = map.getLocationComponent();
-
+                        if (locationComponent == null || !locationComponent.isLocationComponentActivated()) {
+                            return;
+                        }
                         if (centerMarker != null && centerMarker.getVisibility() == View.VISIBLE
                                 && locationComponent != null && locationComponent.getLastKnownLocation() != null) {
 
@@ -652,8 +654,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // Получить текущее местоположение (если геолокация включена)
     public android.location.Location getCurrentLocation() {
-        if (mapLibre != null && mapLibre.getLocationComponent() != null &&
-                mapLibre.getLocationComponent().getLastKnownLocation() != null) {
+        if (mapLibre != null && mapLibre.getLocationComponent().isLocationComponentActivated() && mapLibre.getLocationComponent().getLastKnownLocation() != null) {
             return mapLibre.getLocationComponent().getLastKnownLocation();
         }
         return null;
@@ -1441,7 +1442,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 // Кнопка ПЛЮСИК (btnAddList)
         findViewById(R.id.btnAddList).setOnClickListener(v -> {
             Log.d("OzTrip1", getString(R.string.text_auto_130) + allLists.size());
-            TravelList newList = new TravelList(getString(R.string.text_auto_131) + (allLists.size() + 1));
+            TravelList newList = new TravelList(getString(R.string.text_auto_131) + " " + (allLists.size() + 1));
             allLists.add(newList);
             Log.d("OzTrip1", getString(R.string.text_auto_132) + allLists.size());
 
@@ -1568,21 +1569,22 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
         if (btnAction != null) {
             btnAction.setOnClickListener(v -> {
-                // Проверяем, что карта готова и геолокация включена
-                if (mapLibre != null && mapLibre.getLocationComponent().getLastKnownLocation() != null) {
+                if (mapLibre != null && mapLibre.getLocationComponent() != null
+                        && mapLibre.getLocationComponent().isLocationComponentActivated()
+                        && mapLibre.getLocationComponent().getLastKnownLocation() != null) {
 
-                    // 1. АНИМАЦИЯ НАЖАТИЯ (Luxury Spring Effect)
+                    // 1. АНИМАЦИЯ НАЖАТИЯ
                     btnAction.animate().scaleX(0.8f).scaleY(0.8f).setDuration(150)
                             .withEndAction(() -> btnAction.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start());
 
-                    // 2. ВИБРАЦИЯ (Четкий клик прибора)
+                    // 2. ВИБРАЦИЯ
                     v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
 
-                    // 3. ПОЛЕТ КАМЕРЫ: Плавно и быстро летим к пользователю
+                    // 3. ПОЛЕТ КАМЕРЫ
                     android.location.Location loc = mapLibre.getLocationComponent().getLastKnownLocation();
                     CameraPosition pos = new CameraPosition.Builder()
                             .target(new LatLng(loc.getLatitude(), loc.getLongitude()))
-                            .zoom(16f) // Приближаем для фокуса
+                            .zoom(16f)
                             .bearing(0)
                             .tilt(0)
                             .build();
@@ -1590,6 +1592,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 2000);
 
                     Toast.makeText(this, getString(R.string.text_auto_137), Toast.LENGTH_SHORT).show();
+
                 } else {
                     Toast.makeText(this, getString(R.string.text_auto_138), Toast.LENGTH_SHORT).show();
                 }
@@ -1706,6 +1709,76 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
 
 
+    }
+    public LiquidSegmentedControl getLiquidNav() {
+        return liquidNav;
+    }
+    public void createTrip(String name) {
+        TravelList newList = new TravelList(name);
+        allLists.add(newList);
+        currentActiveList = newList;
+        uniqueLocations = newList.locations;
+        pathPoints = newList.pathPoints;
+        if (listAdapter != null) {
+            listAdapter.notifyDataSetChanged();
+            listAdapter.setSelectedIndex(allLists.size() - 1);
+        }
+        refreshSavedPoints();
+        saveAllData();
+        syncAllDataToCloud();
+        updateTravelCount();
+        invalidateAiContext();
+    }
+
+    public void renameTrip(String oldName, String newName) {
+        for (TravelList list : allLists) {
+            if (list.name.equals(oldName)) {
+                list.name = newName;
+                if (listAdapter != null) listAdapter.notifyDataSetChanged();
+                saveAllData();
+                syncAllDataToCloud();
+                invalidateAiContext();
+                break;
+            }
+        }
+    }
+
+    public void deleteTrip(String name) {
+        for (int i = 0; i < allLists.size(); i++) {
+            if (allLists.get(i).name.equals(name)) {
+                deleteTravelList(i);
+                invalidateAiContext();
+                break;
+            }
+        }
+    }
+
+    public void addPoint(double lat, double lng, String name) {
+        LatLng point = new LatLng(lat, lng);
+        SavedLocation loc = new SavedLocation(point);
+        loc.customName = name;
+        uniqueLocations.add(loc);
+        pathPoints.add(point);
+        refreshSavedPoints();
+        saveAllData();
+        syncAllDataToCloud();
+        invalidateAiContext();
+    }
+
+    public void buildRoute(List<LatLng> points) {
+        pathPoints.clear();
+        pathPoints.addAll(points);
+        uniqueLocations.clear();
+        for (LatLng p : points) {
+            SavedLocation loc = new SavedLocation(p);
+            uniqueLocations.add(loc);
+        }
+        currentActiveList.locations = new ArrayList<>(uniqueLocations);
+        currentActiveList.pathPoints = new ArrayList<>(pathPoints);
+        refreshSavedPoints();
+        saveAllData();
+        syncAllDataToCloud();
+        invalidateAiContext();
     }
     private String copyPhotoToPrivateStorage(Uri sourceUri) {
         try {
