@@ -96,7 +96,7 @@ dependencies {
     implementation("org.maplibre.gl:android-plugin-annotation-v9:1.0.0")
 
 
-
+    implementation("androidx.core:core-ktx:1.12.0") // или последняя версия
 
     // Изображения (Glide)
     implementation("com.github.bumptech.glide:glide:4.16.0")

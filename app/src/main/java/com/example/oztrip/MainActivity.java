@@ -11,6 +11,8 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -28,6 +30,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -35,6 +38,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.TooltipCompat;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -82,11 +86,16 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.util.Locale;
+import java.util.concurrent.Executors;
 
 import android.content.SharedPreferences;
 import android.content.Context;
+import androidx.core.app.ActivityCompat;
 
-public class MainActivity extends BaseActivity  {
+public class MainActivity extends BaseActivity {
+    private Bundle savedState;
+    private ProgressBar pbGlobalLoading;
+    private boolean isMapReady = false;
 
     private boolean isFirstResume = true;
     private LiquidSegmentedControl liquidNav;
@@ -115,13 +124,31 @@ public class MainActivity extends BaseActivity  {
     // В MainActivity:
     private TravelListAdapter listAdapter;
     private RecyclerView rvTravelLists;
+    private long lastCameraUpdate = 0;
     private List<TravelList> allLists = new ArrayList<>();
 
     private TravelList currentActiveList;
+    private final Handler saveHandler = new Handler(Looper.getMainLooper());
+    private final Runnable saveRunnable = new Runnable() {
+        @Override
+        public void run() {
+            // Выполняем ФАКТИЧЕСКОЕ сохранение
+            saveAllData();
+            syncAllDataToCloud();
+        }
+    };
+
+    private void scheduleSave() {
+        // Удаляем предыдущий отложенный вызов (debounce)
+        saveHandler.removeCallbacks(saveRunnable);
+        // Планируем новый через 2 секунды
+        saveHandler.postDelayed(saveRunnable, 2000);
+    }
 
     private org.maplibre.android.annotations.Icon createPremiumMarker(SavedLocation loc) {
-        // 0. Если иконка уже была создана ранее — берем из кэша (Экономим ресурсы!)
-        if (loc.cachedIcon != null) return loc.cachedIcon;
+        if (loc.cachedIcon != null && !loc.hasNewPhoto()) {
+            return loc.cachedIcon;
+        }
 
         int canvasSize = (int) dpToPx(74); // Чуть увеличим под тени
         android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(canvasSize, canvasSize, android.graphics.Bitmap.Config.ARGB_8888);
@@ -164,21 +191,20 @@ public class MainActivity extends BaseActivity  {
                     Bitmap source = BitmapFactory.decodeFile(path);
                     if (source != null) {
 
-                    // 1. Делаем фото квадратным (Center Crop)
-                    int size = Math.min(source.getWidth(), source.getHeight());
-                    int x = (source.getWidth() - size) / 2;
-                    int y = (source.getHeight() - size) / 2;
-                    android.graphics.Bitmap squared = android.graphics.Bitmap.createBitmap(source, x, y, size, size);
+                        // 1. Делаем фото квадратным (Center Crop)
+                        int size = Math.min(source.getWidth(), source.getHeight());
+                        int x = (source.getWidth() - size) / 2;
+                        int y = (source.getHeight() - size) / 2;
+                        android.graphics.Bitmap squared = android.graphics.Bitmap.createBitmap(source, x, y, size, size);
 
-                    // 2. Масштабируем под размер нашего маркера
-                    int targetDim = (int) (mainCircleRadius * 2);
-                    android.graphics.Bitmap scaled = android.graphics.Bitmap.createScaledBitmap(squared, targetDim, targetDim, true);
+                        // 2. Масштабируем под размер нашего маркера
+                        int targetDim = (int) (mainCircleRadius * 2);
+                        android.graphics.Bitmap scaled = android.graphics.Bitmap.createScaledBitmap(squared, targetDim, targetDim, true);
 
-                    // 3. Создаем шейдер для круглой отрисовки
-                    android.graphics.BitmapShader shader = new android.graphics.BitmapShader(scaled, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP);
-                    photoPaint.setShader(shader);
-                }
-                    else {
+                        // 3. Создаем шейдер для круглой отрисовки
+                        android.graphics.BitmapShader shader = new android.graphics.BitmapShader(scaled, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP);
+                        photoPaint.setShader(shader);
+                    } else {
                         hasPhoto = false;
                     }
                 } else {
@@ -246,6 +272,7 @@ public class MainActivity extends BaseActivity  {
         loc.cachedIcon = org.maplibre.android.annotations.IconFactory.getInstance(this).fromBitmap(bitmap);
         return loc.cachedIcon;
     }
+
     private void checkPermissions() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -254,267 +281,283 @@ public class MainActivity extends BaseActivity  {
             }
         }
     }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Создаем менеджер для текущего вида карты
 
         allLists = new ArrayList<>();
         uniqueLocations = new ArrayList<>();
         pathPoints = new ArrayList<>();
 
-        // 2. ПОТОМ Загружаем данные из памяти
+        // Загружаем данные из памяти
         loadAllData();
-
 
         if (allLists.isEmpty()) {
             TravelList defaultList = new TravelList(getString(R.string.text_auto_104));
-
             allLists.add(defaultList);
             currentActiveList = defaultList;
         }
+
         try {
             MapLibre.getInstance(this);
-            // Принудительно применяем сохранённый язык
-            // 1. Применяем язык ДО всего
             SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
             String lang = prefs.getString("language", "ru");
             setLocale(lang);
             currentLanguage = lang;
 
             setContentView(R.layout.activity_main);
-// Собираем все View, которые должны быть видны только на вкладке Карта
-            // ======== Инициализация View и BottomSheet =========
 
+            // Проверка разрешения геолокации
+            if (!hasLocationPermission()) {
+                // Если разрешения нет – прячем все элементы и запрашиваем
+                findViewById(R.id.mapContainer).setVisibility(View.GONE);
+                findViewById(R.id.aiContainer).setVisibility(View.GONE);
+                findViewById(R.id.liquid_nav).setVisibility(View.GONE);
+                requestLocationPermission();
+            } else {
+                // Разрешение уже есть – запускаем полную инициализацию
+                this.savedState = savedInstanceState;
+                initializeApp();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.text_auto_108) + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
 
+    // Теперь эти методы – часть класса, а не onCreate
 
-            // ======== Добавляем AiFragment =========
-            getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.aiContainer, new AiFragment())
-                    .commit();
+    private boolean hasLocationPermission() {
+        return androidx.core.app.ActivityCompat.checkSelfPermission(this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+    }
 
-// Группы View, которые относятся к карте
-            mapContainer = findViewById(R.id.mapContainer);
-            btnSaveLocation = findViewById(R.id.btnSaveLocation);
-            topPanel = findViewById(R.id.topPanel);
-            centerMarker = findViewById(R.id.centerMarker);
-            sideButtons = findViewById(R.id.sideButtons);
-            infoCard = findViewById(R.id.infoCard);
-            mapContentContainer = findViewById(R.id.mapContentContainer);
-            aiContainer = findViewById(R.id.aiContainer);
-// остальные findViewById…
+    private void requestLocationPermission() {
+        androidx.core.app.ActivityCompat.requestPermissions(this,
+                new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, 1001);
+    }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001 && grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            // Пользователь дал разрешение – перезапускаем активность
+            recreate();
+        } else {
+            Toast.makeText(this, "Без геолокации приложение не работает", Toast.LENGTH_LONG).show();
+            finishAffinity();
+            System.exit(0);
+        }
+    }
 
+    // Метод, который содержит всю инициализацию (ранее всё было в onCreate)
+    private void initializeApp() {
+        // ======== Добавляем AiFragment =========
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.aiContainer, new AiFragment())
+                .commit();
 
-            sheetBehavior = BottomSheetBehavior.from(infoCard);
-            sheetBehavior.setHideable(true);
-            sheetBehavior.setPeekHeight(450);                  // ставь здесь
-            sheetBehavior.setHalfExpandedRatio(0.4f);
-            sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-            setupBottomSheetCallbacks(); // <-- один раз здесь
-// Переключение вкладок
-            liquidNav = findViewById(R.id.liquid_nav);
-            boolean isDark = (getResources().getConfiguration().uiMode
-                    & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-            liquidNav.setDarkMode(isDark);
-            if (liquidNav != null) {
-                liquidNav.setOnTabSelectedListener(index -> {
+        // Группы View, которые относятся к карте
+        mapContainer = findViewById(R.id.mapContainer);
+        btnSaveLocation = findViewById(R.id.btnSaveLocation);
+        topPanel = findViewById(R.id.topPanel);
+        centerMarker = findViewById(R.id.centerMarker);
+        sideButtons = findViewById(R.id.sideButtons);
+        infoCard = findViewById(R.id.infoCard);
+        mapContentContainer = findViewById(R.id.mapContentContainer);
+        aiContainer = findViewById(R.id.aiContainer);
+
+        sheetBehavior = BottomSheetBehavior.from(infoCard);
+        sheetBehavior.setHideable(true);
+        sheetBehavior.setPeekHeight(450);
+        sheetBehavior.setHalfExpandedRatio(0.4f);
+        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        setupBottomSheetCallbacks();
+
+        // Переключатель вкладок
+        liquidNav = findViewById(R.id.liquid_nav);
+        boolean isDark = (getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        liquidNav.setDarkMode(isDark);
+        if (liquidNav != null) {
+            liquidNav.setOnTabSelectedListener(index -> {
+                if (mapView != null) {
+                    mapView.onResume();
+                }
+                float screenWidth = getResources().getDisplayMetrics().widthPixels;
+                if (index == 0) {
+                    aiContainer.animate()
+                            .translationX(screenWidth)
+                            .alpha(0f)
+                            .setDuration(400)
+                            .withEndAction(() -> {
+                                aiContainer.setVisibility(View.GONE);
+                                aiContainer.setTranslationX(0f);
+                            });
+                    mapContentContainer.setVisibility(View.VISIBLE);
+                    mapContentContainer.setTranslationX(-screenWidth);
+                    mapContentContainer.animate()
+                            .translationX(0f)
+                            .alpha(1f)
+                            .setDuration(400)
+                            .start();
+                    sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                    if (mapLibre != null) mapLibre.getUiSettings().setAllGesturesEnabled(true);
+                } else {
                     if (mapView != null) {
-                        mapView.onResume();  // возобновить рендеринг
+                        mapView.onPause();
                     }
-                    float screenWidth = getResources().getDisplayMetrics().widthPixels;
-                    if (index == 0) {
-                        // === КАРТА ===
-                        // AI-контейнер уезжает вправо
-                        aiContainer.animate()
-                                .translationX(screenWidth)
-                                .alpha(0f)
-                                .setDuration(400)
-                                .withEndAction(() -> {
-                                    aiContainer.setVisibility(View.GONE);
-                                    aiContainer.setTranslationX(0f);
-                                });
-
-                        // Контейнер карты выезжает слева
-                        mapContentContainer.setVisibility(View.VISIBLE);
-                        mapContentContainer.setTranslationX(-screenWidth);
-                        mapContentContainer.animate()
-                                .translationX(0f)
-                                .alpha(1f)
-                                .setDuration(400)
-                                .start();
-
-                        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-                        if (mapLibre != null) mapLibre.getUiSettings().setAllGesturesEnabled(true);
-
-                    } else {
-                        // === ИИ ===
-                        if (mapView != null) {
-                            mapView.onPause();   // приостановить рендеринг
-                        }
-                        // Контейнер карты уезжает влево
-                        mapContentContainer.animate()
-                                .translationX(-screenWidth)
-                                .alpha(0f)
-                                .setDuration(400)
-                                .withEndAction(() -> {
-                                    mapContentContainer.setVisibility(View.INVISIBLE);
-                                    mapContentContainer.setTranslationX(0f); // сброс
-                                });
-
-                        // AI-контейнер появляется справа
-                        aiContainer.setVisibility(View.VISIBLE);
-                        aiContainer.setTranslationX(screenWidth);
-                        aiContainer.setAlpha(0f);
-                        aiContainer.animate()
-                                .translationX(0f)
-                                .alpha(1f)
-                                .setDuration(400)
-                                .start();
-
-                        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-
-                    }
-                });
-            }
-
-
-
-// Если активность восстанавливается после поворота – не добавляем фрагменты заново
-
-            setupRecyclerView();
-            rvTravelLists.setFadingEdgeLength((int) dpToPx(40));
-            rvTravelLists.setHorizontalFadingEdgeEnabled(true);
-            // И не забудь обновить адаптер, если он уже создан
-            if (listAdapter != null) listAdapter.notifyDataSetChanged();
-            // Находим кнопку настроек (шестеренку), которую мы добавили в topBar
-            findViewById(R.id.btnSettings).setOnClickListener(v -> {
-                Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
-                startActivity(intent);
-                // Добавим красивую анимацию перехода, если хочешь
-                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                    mapContentContainer.animate()
+                            .translationX(-screenWidth)
+                            .alpha(0f)
+                            .setDuration(400)
+                            .withEndAction(() -> {
+                                mapContentContainer.setVisibility(View.INVISIBLE);
+                                mapContentContainer.setTranslationX(0f);
+                            });
+                    aiContainer.setVisibility(View.VISIBLE);
+                    aiContainer.setTranslationX(screenWidth);
+                    aiContainer.setAlpha(0f);
+                    aiContainer.animate()
+                            .translationX(0f)
+                            .alpha(1f)
+                            .setDuration(400)
+                            .start();
+                    sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                }
             });
-            mapView = findViewById(R.id.mapView);
-            if (mapView != null) mapView.onCreate(savedInstanceState);
+        }
 
+        setupRecyclerView();
+        rvTravelLists.setFadingEdgeLength((int) dpToPx(40));
+        rvTravelLists.setHorizontalFadingEdgeEnabled(true);
+        if (listAdapter != null) listAdapter.notifyDataSetChanged();
 
+        findViewById(R.id.btnSettings).setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+            startActivity(intent);
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        });
 
+        mapView = findViewById(R.id.mapView);
+        if (mapView != null) mapView.onCreate(savedState);
 
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        boolean isGuest = getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
+                .getBoolean("guest_mode", false);
+        if (auth.getCurrentUser() == null && !isGuest) {
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
+        if (auth.getCurrentUser() != null) {
+            travelRepository = new TravelRepository();
+        }
+        loadTravelDataFromCloud();
+        setupButtons();
 
-            // Проверяем, залогинен ли пользователь
-            FirebaseAuth auth = FirebaseAuth.getInstance();
-            boolean isGuest = getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
-                    .getBoolean("guest_mode", false);
+        if (isFirstLaunch()) {
+            showOnboardingDialog();
+        }
+        if (mapView != null) {
+            mapView.getMapAsync(map -> {
+                this.mapLibre = map;
+                // ПРОВЕРКА: Если стиль уже есть (мы просто вернулись с другого экрана)
+                if (map.getStyle() != null && map.getStyle().isFullyLoaded()) {
+                    // НИЧЕГО НЕ ДЕЛАЕМ. Карта сама всё помнит: и ветки, и границы.
+                    return;
+                }
 
-            if (auth.getCurrentUser() == null && !isGuest) {
-                startActivity(new Intent(this, LoginActivity.class));
-                finish();
-                return;
-            }
-            if (auth.getCurrentUser() != null) {
-                travelRepository = new TravelRepository();
-            }
-            loadTravelDataFromCloud();   // внутри уже есть проверка на пользователя
-            setupButtons();
+                String styleUrl = isDark
+                        ? "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+                        : "https://tiles.openfreemap.org/styles/liberty";
+                map.setStyle(styleUrl, style -> {
+                    // Скрываем UI элементы
+                    map.getUiSettings().setCompassEnabled(false);
+                    map.getUiSettings().setAttributionEnabled(false);
+                    map.getUiSettings().setLogoEnabled(false); // <-- ЭТО КЛЮЧЕВОЙ МЕТОД
 
-            if (mapView != null) {
-                mapView.getMapAsync(map -> {
-                    this.mapLibre = map;
-                    // ПРОВЕРКА: Если стиль уже есть (мы просто вернулись с другого экрана)
-                    if (map.getStyle() != null && map.getStyle().isFullyLoaded()) {
-                        // НИЧЕГО НЕ ДЕЛАЕМ. Карта сама всё помнит: и ветки, и границы.
-                        return;
+                    // Полет в Ереван только при первом запуске
+                    if (map.getCameraPosition().zoom < 3) {
+                        map.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(40.1792, 44.5134), 12), 2000);
+                    }
+                    refreshSavedPoints();
+                    enableLocation(style);
+                    restoreMyData(style);
+                });
+                mapLibre.setOnMarkerClickListener(marker -> {
+                    // 1. Находим, на какую именно базу нажал пользователь
+                    SavedLocation clickedLoc = null;
+                    for (SavedLocation loc : uniqueLocations) {
+                        if (loc.latLng.equals(marker.getPosition())) {
+                            clickedLoc = loc;
+                            break;
+                        }
                     }
 
-                    String styleUrl = isDark
-                            ? "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-                            : "https://tiles.openfreemap.org/styles/liberty";
-                    map.setStyle(styleUrl, style -> {
-                        // Скрываем UI элементы
-                        map.getUiSettings().setCompassEnabled(false);
-                        map.getUiSettings().setAttributionEnabled(false);
-                        map.getUiSettings().setLogoEnabled(false); // <-- ЭТО КЛЮЧЕВОЙ МЕТОД
+                    if (clickedLoc != null) {
+                        // 2. Показываем карточку с данными этой базы
+                        showLocationCard(clickedLoc);
+                    }
 
-                        // Полет в Ереван только при первом запуске
-                        if (map.getCameraPosition().zoom < 3) {
-                            map.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(40.1792, 44.5134), 12), 2000);
-                        }
-                        refreshSavedPoints();
-                        enableLocation(style);
-                        restoreMyData(style);
-                    });
-                    mapLibre.setOnMarkerClickListener(marker -> {
-                        // 1. Находим, на какую именно базу нажал пользователь
-                        SavedLocation clickedLoc = null;
-                        for (SavedLocation loc : uniqueLocations) {
-                            if (loc.latLng.equals(marker.getPosition())) {
-                                clickedLoc = loc;
-                                break;
-                            }
-                        }
+                    return true; // "true" значит, что мы сами обработали нажатие
+                });
 
-                        if (clickedLoc != null) {
-                            // 2. Показываем карточку с данными этой базы
-                            showLocationCard(clickedLoc);
-                        }
-
-                        return true; // "true" значит, что мы сами обработали нажатие
-                    });
-
-                    // ДОБАВЛЯЕМ КЛИК ПО КАРТЕ
+                // ДОБАВЛЯЕМ КЛИК ПО КАРТЕ
 // СЛУШАТЕЛЬ ДЛИННОГО НАЖАТИЯ
-                    map.addOnMapLongClickListener(point -> {
-                        findViewById(android.R.id.content).performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
-                        // 1. Показываем визуальный getString(R.string.text_auto_105) (пин) на карте
-                        showMarkerAt(point.getLatitude(), point.getLongitude());
+                map.addOnMapLongClickListener(point -> {
+                    findViewById(android.R.id.content).performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                    // 1. Показываем визуальный getString(R.string.text_auto_105) (пин) на карте
+                    showMarkerAt(point.getLatitude(), point.getLongitude());
 
-                        // 2. Запускаем поиск данных (тот метод, что мы создали ранее)
-                        reverseSearch(point.getLatitude(), point.getLongitude());
+                    // 2. Запускаем поиск данных (тот метод, что мы создали ранее)
+                    reverseSearch(point.getLatitude(), point.getLongitude());
 
-                        // true означает, что событие обработано
-                        return true;
-                    });
+                    // true означает, что событие обработано
+                    return true;
+                });
 
-                    // 2. ОБЫЧНЫЙ КЛИК (Очистка карты)
-                    map.addOnMapClickListener(point -> {
-                        android.graphics.PointF screenPoint = mapLibre.getProjection().toScreenLocation(point);
-                        java.util.List<Feature> features = mapLibre.queryRenderedFeatures(screenPoint);
+                // 2. ОБЫЧНЫЙ КЛИК (Очистка карты)
+                map.addOnMapClickListener(point -> {
+                    android.graphics.PointF screenPoint = mapLibre.getProjection().toScreenLocation(point);
+                    java.util.List<Feature> features = mapLibre.queryRenderedFeatures(screenPoint);
 
-                        if (!features.isEmpty()) {
-                            Feature feat = features.get(0);
+                    if (!features.isEmpty()) {
+                        Feature feat = features.get(0);
 
-                            // Скрываем оранжевые слои
-                            hideManualOverlays();
+                        // Скрываем оранжевые слои
+                        hideManualOverlays();
 
-                            if (feat.geometry() instanceof Point) {
-                                Point p = (Point) feat.geometry();
-                                // Вместо мгновенного вызова карточки, запускаем поиск адреса
-                                // чтобы получить город и страну для этой аптеки/магазина
-                                reverseSearch(p.latitude(), p.longitude());
-                            }
-                        } else {
-                            clearMapOverlays();
+                        if (feat.geometry() instanceof Point) {
+                            Point p = (Point) feat.geometry();
+                            // Вместо мгновенного вызова карточки, запускаем поиск адреса
+                            // чтобы получить город и страну для этой аптеки/магазина
+                            reverseSearch(p.latitude(), p.longitude());
                         }
-                        return true;
-                    });
+                    } else {
+                        clearMapOverlays();
+                    }
+                    return true;
+                });
 
-                    map.addOnCameraMoveListener(() -> {
-                        double bearing = map.getCameraPosition().bearing;
+                map.addOnCameraMoveListener(() -> {
+                    long now = System.currentTimeMillis();
+                    if (now - lastCameraUpdate < 50) return;
+                    lastCameraUpdate = now;
+                    double bearing = map.getCameraPosition().bearing;
 
-                        // БЫЛО: FloatingActionButton
-                        // СТАЛО: ImageView
-                        ImageView fabCompass = findViewById(R.id.fabCompass);
-                        if (fabCompass != null) {
-                            fabCompass.setRotation((float) -bearing);
-                        }
-                    });
-                    map.addOnCameraMoveListener(() -> {
-                        // 1. Убедимся, что метка включена и геолокация доступна
+                    // БЫЛО: FloatingActionButton
+                    // СТАЛО: ImageView
+                    ImageView fabCompass = findViewById(R.id.fabCompass);
+                    if (fabCompass != null) {
+                        fabCompass.setRotation((float) -bearing);
+                    }
 
+                    if (hasLocationPermission()) {
                         LocationComponent locationComponent = map.getLocationComponent();
-                        if (locationComponent == null || !locationComponent.isLocationComponentActivated()) {
-                            return;
-                        }
                         if (centerMarker != null && centerMarker.getVisibility() == View.VISIBLE
                                 && locationComponent != null && locationComponent.getLastKnownLocation() != null) {
 
@@ -565,9 +608,9 @@ public class MainActivity extends BaseActivity  {
                                 centerMarker.animate().scaleX(1.0f).scaleY(1.0f).translationY(dpToPx(-2)).alpha(1.0f).setDuration(200).start();
                             }
                         }
-                    });
-                    mapLibre.addOnCameraMoveListener(() -> {
-                        if (isSearching) return;
+                    }
+
+                    if (!isSearching) {
                         // 1. Берем координаты центра экрана (в LatLng и в Пикселях)
                         org.maplibre.android.geometry.LatLng centerLatLng = mapLibre.getCameraPosition().target;
                         android.graphics.PointF centerPoint = mapLibre.getProjection().toScreenLocation(centerLatLng);
@@ -591,17 +634,33 @@ public class MainActivity extends BaseActivity  {
                                 break;
                             }
                         }
-                    });
-
+                    }
                 });
 
-            }
-        } catch (Exception e) {
-            // Если что-то пойдет совсем не так, мы увидим текст ошибки вместо простого вылета
-            Toast.makeText(this, getString(R.string.text_auto_108) + e.getMessage(), Toast.LENGTH_LONG).show();
+
+            });
         }
     }
 
+    private boolean isFirstLaunch() {
+        SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
+        boolean first = prefs.getBoolean("first_launch", true);
+        if (first) {
+            prefs.edit().putBoolean("first_launch", false).apply();
+        }
+        return first;
+    }
+
+    private void showOnboardingDialog() {
+        // Используем твой же стиль PremiumDialogTheme
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.PremiumDialogTheme);
+        View view = getLayoutInflater().inflate(R.layout.dialog_onboarding, null);
+        builder.setView(view);
+        AlertDialog dialog = builder.create();
+
+        view.findViewById(R.id.btnGotIt).setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
+    }
     private void setLocale(String lang) {
         Locale locale = new Locale(lang);
         Locale.setDefault(locale);
@@ -621,16 +680,7 @@ public class MainActivity extends BaseActivity  {
         return isGuest ? "guest_travels" : "saved_travels";
     }
 
-    private void animateSlideInLeft(View view, float screenWidth, int duration) {
-        if (view == null) return;
-        view.setVisibility(View.VISIBLE);
-        view.setTranslationX(-screenWidth);
-        view.animate()
-                .translationX(0f)
-                .alpha(1f)
-                .setDuration(duration)
-                .start();
-    }
+
 
     // Вернуть список всех поездок
     public List<TravelList> getAllTravelLists() {
@@ -654,11 +704,15 @@ public class MainActivity extends BaseActivity  {
 
     // Получить текущее местоположение (если геолокация включена)
     public android.location.Location getCurrentLocation() {
-        if (mapLibre != null && mapLibre.getLocationComponent().isLocationComponentActivated() && mapLibre.getLocationComponent().getLastKnownLocation() != null) {
+        if (!hasLocationPermission()) return null;
+        if (mapLibre != null && mapLibre.getLocationComponent().isLocationComponentActivated()
+                && mapLibre.getLocationComponent().getLastKnownLocation() != null) {
             return mapLibre.getLocationComponent().getLastKnownLocation();
         }
         return null;
     }
+
+
 
     private void fadeOutView(View view, int duration) {
         view.animate().alpha(0f).setDuration(duration)
@@ -722,19 +776,7 @@ public class MainActivity extends BaseActivity  {
         if (aiFragment != null) aiFragment.clearCachedContext();
     }
 
-    private String loadStyleFromAssets() {
-        try {
-            InputStream is = getAssets().open("style.json");
-            int size = is.available();
-            byte[] buffer = new byte[size];
-            is.read(buffer);
-            is.close();
-            return new String(buffer, "UTF-8");
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
+
     private void loadTravelDataFromCloud() {
         if (FirebaseAuth.getInstance().getCurrentUser() == null) {
             // Гость – просто загружаем локальные данные, не лезем в облако
@@ -742,37 +784,40 @@ public class MainActivity extends BaseActivity  {
             isDataLoaded = true;
             return;
         }
-        travelRepository.loadAllLists(new TravelRepository.OnDataLoadedListener() {
-            @Override
-            public void onLoaded(List<TravelList> lists) {
-                if (lists != null && !lists.isEmpty()) {
-                    allLists.clear();
-                    allLists.addAll(lists);
-                    // Удаляем дубликаты
-                    removeDuplicateLists();
-                    // Сортируем
-                    Collections.sort(allLists, (a, b) -> a.name.compareToIgnoreCase(b.name));
-                } else {
-                    allLists.clear();
-                    allLists.add(new TravelList(getString(R.string.text_auto_109)));
-                    syncAllDataToCloud();
+        Executors.newSingleThreadExecutor().execute(() -> {
+            travelRepository.loadAllLists(new TravelRepository.OnDataLoadedListener() {
+                @Override
+                public void onLoaded(List<TravelList> lists) {
+                    runOnUiThread(() -> {
+                        // сюда скопируй весь код, который был внутри onLoaded
+                        if (lists != null && !lists.isEmpty()) {
+                            allLists.clear();
+                            allLists.addAll(lists);
+                            removeDuplicateLists();
+                            Collections.sort(allLists, (a, b) -> a.name.compareToIgnoreCase(b.name));
+                        } else {
+                            allLists.clear();
+                            allLists.add(new TravelList(getString(R.string.text_auto_109)));
+                            syncAllDataToCloud();
+                        }
+                        currentActiveList = allLists.get(0);
+                        uniqueLocations = currentActiveList.locations;
+                        pathPoints = currentActiveList.pathPoints;
+                        saveAllData();
+                        if (listAdapter != null) listAdapter.notifyDataSetChanged();
+                        refreshSavedPoints();
+                        isDataLoaded = true;
+                    });
                 }
-                currentActiveList = allLists.get(0);
-                uniqueLocations = currentActiveList.locations;
-                pathPoints = currentActiveList.pathPoints;
 
-                saveAllData();
-
-                if (listAdapter != null) listAdapter.notifyDataSetChanged();
-                refreshSavedPoints();
-                isDataLoaded = true;
-            }
-
-            @Override
-            public void onError(String error) {
-                Log.e("Firestore", error);
-                loadLocalBackup();
-            }
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        Log.e("Firestore", error);
+                        loadLocalBackup();
+                    });
+                }
+            });
         });
     }
     private void removeDuplicateLists() {
@@ -1017,8 +1062,7 @@ public class MainActivity extends BaseActivity  {
                 refreshSavedPoints();
 
                 // 7. Сохраняем изменения
-                saveAllData();
-                syncAllDataToCloud();
+                scheduleSave();
 
                 // 8. Закрываем диалоги
                 deleteDialog.dismiss();
@@ -1033,8 +1077,7 @@ public class MainActivity extends BaseActivity  {
         });
 
         dialog.setOnDismissListener(d -> {
-            saveAllData();
-            syncAllDataToCloud();
+            scheduleSave();
         });
         dialog.show();
     }
@@ -1114,8 +1157,7 @@ public class MainActivity extends BaseActivity  {
                             refreshSavedPoints();
 
                             // 4. Сохраняем изменения
-                            saveAllData();
-                            syncAllDataToCloud();
+                            scheduleSave();
 
                             v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
                             Toast.makeText(this, getString(R.string.text_auto_120), Toast.LENGTH_SHORT).show();
@@ -1187,8 +1229,7 @@ public class MainActivity extends BaseActivity  {
                     tvDateDisplay.setTextColor(android.graphics.Color.parseColor("#FF9800")); // Оранжевый акцент
 
                     // 5. Сохраняем в память
-                    saveAllData();
-                    syncAllDataToCloud();
+                    scheduleSave();
                 },
                 year, month, day);
 
@@ -1215,8 +1256,7 @@ public class MainActivity extends BaseActivity  {
                         // Сбрасываем кэш иконки и перерисовываем маркеры на карте
                         loc.cachedIcon = null;
                         refreshSavedPoints();
-                        saveAllData();
-                        syncAllDataToCloud();
+                        scheduleSave();
 
                         // Прячем клавиатуру
                         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
@@ -1459,8 +1499,7 @@ public class MainActivity extends BaseActivity  {
             listAdapter.setSelectedIndex(newIndex);
 
             refreshSavedPoints();
-            saveAllData();
-            syncAllDataToCloud();
+            scheduleSave();
             updateTravelCount();
         });
         // Поиск
@@ -1523,8 +1562,7 @@ public class MainActivity extends BaseActivity  {
 
                 invalidateAiContext();   // чтобы ИИ увидел новую точку
                 refreshSavedPoints();
-                saveAllData();
-                syncAllDataToCloud();
+                scheduleSave();
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
 
                 // Закрываем информационную карточку (если открыта)
@@ -1563,12 +1601,17 @@ public class MainActivity extends BaseActivity  {
                     v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
                 }
             });
+            TooltipCompat.setTooltipText(fabCompass, "Компас: повернуть карту на север");
         }
 // Находим нашу новую оранжевую кнопку по ID
         final ImageView btnAction = findViewById(R.id.fabAction);
 
         if (btnAction != null) {
             btnAction.setOnClickListener(v -> {
+                if (!hasLocationPermission()) {
+                    Toast.makeText(this, "Нет доступа к геолокации", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 if (mapLibre != null && mapLibre.getLocationComponent() != null
                         && mapLibre.getLocationComponent().isLocationComponentActivated()
                         && mapLibre.getLocationComponent().getLastKnownLocation() != null) {
@@ -1597,6 +1640,7 @@ public class MainActivity extends BaseActivity  {
                     Toast.makeText(this, getString(R.string.text_auto_138), Toast.LENGTH_SHORT).show();
                 }
             });
+            btnAction.setTooltipText("Переместить карту к моему местоположению");
         }
 
 // 1. Находим кнопку ОДИН РАЗ
@@ -1626,6 +1670,8 @@ public class MainActivity extends BaseActivity  {
                     Toast.makeText(this, getString(R.string.text_auto_139), Toast.LENGTH_SHORT).show();
                 }
             });
+            // Кнопка "местоположение объекта"
+            btnAction.setTooltipText("Переместить карту к местоположению объекта");
         }
 
 
@@ -1706,6 +1752,7 @@ public class MainActivity extends BaseActivity  {
                     Toast.makeText(this, getString(R.string.text_auto_144), Toast.LENGTH_SHORT).show();
                 }
             });
+            imgToggle.setTooltipText("Скрыть или показать центральную метку");
         }
 
 
@@ -1724,8 +1771,7 @@ public class MainActivity extends BaseActivity  {
             listAdapter.setSelectedIndex(allLists.size() - 1);
         }
         refreshSavedPoints();
-        saveAllData();
-        syncAllDataToCloud();
+        scheduleSave();
         updateTravelCount();
         invalidateAiContext();
     }
@@ -1735,8 +1781,7 @@ public class MainActivity extends BaseActivity  {
             if (list.name.equals(oldName)) {
                 list.name = newName;
                 if (listAdapter != null) listAdapter.notifyDataSetChanged();
-                saveAllData();
-                syncAllDataToCloud();
+                scheduleSave();
                 invalidateAiContext();
                 break;
             }
@@ -1760,8 +1805,7 @@ public class MainActivity extends BaseActivity  {
         uniqueLocations.add(loc);
         pathPoints.add(point);
         refreshSavedPoints();
-        saveAllData();
-        syncAllDataToCloud();
+        scheduleSave();
         invalidateAiContext();
     }
 
@@ -1776,8 +1820,7 @@ public class MainActivity extends BaseActivity  {
         currentActiveList.locations = new ArrayList<>(uniqueLocations);
         currentActiveList.pathPoints = new ArrayList<>(pathPoints);
         refreshSavedPoints();
-        saveAllData();
-        syncAllDataToCloud();
+        scheduleSave();
         invalidateAiContext();
     }
     private String copyPhotoToPrivateStorage(Uri sourceUri) {
@@ -1824,8 +1867,7 @@ public class MainActivity extends BaseActivity  {
             if (!newName.isEmpty()) {
                 allLists.get(position).name = newName;
                 if (listAdapter != null) listAdapter.notifyItemChanged(position);
-                saveAllData();
-                syncAllDataToCloud();
+                scheduleSave();
                 updateTravelCount();
                 if (onRenamed != null) onRenamed.run();
             }
@@ -1894,8 +1936,7 @@ public class MainActivity extends BaseActivity  {
         refreshSavedPoints();
         updateTravelCount();
         // 5. Сохраняем изменения локально и в облаке
-        saveAllData();
-        syncAllDataToCloud();
+        scheduleSave();
 
         Toast.makeText(this, getString(R.string.text_auto_148), Toast.LENGTH_SHORT).show();
     }
@@ -2149,9 +2190,6 @@ public class MainActivity extends BaseActivity  {
         mapLibre.clear();
 
         // Сбрасываем кэш иконок перед перерисовкой
-        for (SavedLocation loc : uniqueLocations) {
-            loc.cachedIcon = null;
-        }
 
         for (SavedLocation loc : uniqueLocations) {
             mapLibre.addMarker(new org.maplibre.android.annotations.MarkerOptions()
@@ -2165,6 +2203,10 @@ public class MainActivity extends BaseActivity  {
                     .color(android.graphics.Color.parseColor("#A62C2C2C"))
                     .width(dpToPx(2)));
         }
+
+        // В конце refreshSavedPoints()
+        View pb = findViewById(R.id.pbMapLoading);
+        if (pb != null) pb.setVisibility(View.GONE);
     }
 
     private void drawBoundary(JSONObject geojson) {
@@ -2336,6 +2378,7 @@ public class MainActivity extends BaseActivity  {
         if (mapView != null) mapView.onPause();
         saveAllData(); // Сохраняем всё перед выходом
     }
+
 
     @Override protected void onStop() { super.onStop(); if (mapView != null) mapView.onStop(); }
 

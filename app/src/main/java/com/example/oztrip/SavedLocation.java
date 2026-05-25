@@ -2,6 +2,7 @@ package com.example.oztrip;
 
 import org.maplibre.android.geometry.LatLng;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -9,6 +10,8 @@ import java.util.Map;
 
 // Уникальное место сохранения
 public class SavedLocation {
+    public transient long lastPhotoTimestamp = 0;
+
     public transient org.maplibre.android.annotations.Icon cachedIcon = null;
     public float rating = 50f; // Оценка по умолчанию (середина)
     public LatLng latLng;
@@ -49,5 +52,17 @@ public class SavedLocation {
         loc.rating = ((Double) map.get("rating")).floatValue();
         loc.photoPaths = (List<String>) map.get("photoPaths");
         return loc;
+    }
+
+    public boolean hasNewPhoto() {
+        if (photoPaths == null || photoPaths.isEmpty()) return false;
+        String lastPath = photoPaths.get(photoPaths.size() - 1);
+        File file = new File(lastPath);
+        long currentTimestamp = file.exists() ? file.lastModified() : 0;
+        if (currentTimestamp != lastPhotoTimestamp) {
+            lastPhotoTimestamp = currentTimestamp;
+            return true;
+        }
+        return false;
     }
 }

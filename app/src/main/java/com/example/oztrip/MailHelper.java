@@ -19,7 +19,7 @@ public class MailHelper {
     public static void sendSecurityAlert(Context context, String userEmail, String type) {
         new AsyncTask<Void, Void, Void>() {
             @Override
-            protected Void doInBackground(Void... voids) {
+            protected Void doInBackground(Void... /**/voids) {
                 Properties props = new Properties();
                 props.put("mail.smtp.auth", "true");
                 props.put("mail.smtp.starttls.enable", "true");

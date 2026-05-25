@@ -20,6 +20,13 @@
         android:id="@+id/mapContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
+        <ProgressBar
+            android:id="@+id/pbMapLoading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminateTint="#FF9800"
+            android:visibility="visible" />
         <org.maplibre.android.maps.MapView
             android:id="@+id/mapView"
             android:layout_width="match_parent"
