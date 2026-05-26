@@ -85,6 +85,8 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
 
+    implementation("androidx.viewpager2:viewpager2:1.0.0")
+
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
 // Нативный SDK от MapTiler (включает встроенные функции поиска)

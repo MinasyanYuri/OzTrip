@@ -117,6 +117,7 @@ public class SettingsActivity extends BaseActivity  {
                 prefs.edit()
                         .remove("guest_mode")
                         .remove("guest_travels")
+                        .remove("last_onboarding_user")
                         .apply();
             } else {
                 FirebaseAuth.getInstance().signOut();

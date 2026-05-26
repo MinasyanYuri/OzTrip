@@ -78,6 +78,7 @@ public class LoginActivity extends BaseActivity  {
                 .edit()
                 .putBoolean("guest_mode", true)
                 .remove("guest_travels")
+                .remove("last_onboarding_user")
                 .apply();
 
         Intent intent = new Intent(LoginActivity.this, MainActivity.class);

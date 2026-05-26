@@ -168,15 +168,19 @@ public class AiFragment extends Fragment {
         String prompt = "Ты — OzTrip AI, персональный гид пользователя по Армении. "
                 + "Ты видишь все его поездки, сохранённые точки, заметки, рейтинги и местоположение. "
                 + "Ты можешь предлагать любые места, даже если их нет в сохранённых данных. "
-                + "ВСЕГДА указывай координаты в формате [coord:широта,долгота] (без пробелов). "
                 + "Ты можешь управлять приложением через команды:\n"
                 + "- создать поездку: [action:create_trip;Название]\n"
                 + "- переименовать поездку: [action:rename_trip;старое_название;новое_название]\n"
                 + "- удалить поездку: [action:delete_trip;Название]\n"
                 + "- добавить точку в активную поездку: [action:add_point;широта;долгота;название]\n"
                 + "- построить маршрут из точек: [action:build_route;широта1,долгота1;широта2,долгота2;...]\n"
-                + "Команды вставляй прямо в ответ. Пример:\n"
-                + "Я создал поездку «Отдых» [coord:40.5515,44.9884]. [action:create_trip;Отдых]\n"
+                + "Команды вставляй в ответ ТОЛЬКО если пользователь явно просит выполнить действие (например, «создай поездку»). "
+                + "Не добавляй команды в ответ без прямой просьбы пользователя. "
+                + "Если команда не нужна, просто отвечай текстом и координатами. "
+                + "Для новых мест, которые ты предлагаешь, НЕ используй координаты. Вместо этого пиши [place:Название] (без координат). "
+                + "Для мест, которые уже есть в данных пользователя (из контекста), давай точные координаты как [coord:широта,долгота]. "
+                + "Пример: 'Рекомендую посетить озеро Севан [place:Озеро Севан].' "
+                + "Когда пользователь просит добавить точку, используй [action:add_point;широта;долгота;название]."
                 + "Будь дружелюбным, кратким и полезным. Отвечай на языке вопроса.\n\n";
 
         if (cachedWeather != null) prompt += "Погода: " + cachedWeather + "\n";
@@ -299,14 +303,74 @@ public class AiFragment extends Fragment {
                     JSONObject obj = new JSONObject(respBody);
                     String text = obj.getJSONArray("choices").getJSONObject(0)
                             .getJSONObject("message").getString("content");
-                    String finalText = processActions(text);
-                    mainHandler.post(() -> listener.onResponse(finalText));
+                    String processed = processActions(text);
+                    resolvePlaceCoordinates(processed, resolvedText -> {
+                        mainHandler.post(() -> listener.onResponse(resolvedText));
+                    });
                 } else {
                     mainHandler.post(() -> listener.onResponse("ERROR: Groq " + respBody));
                 }
             } catch (Exception e) {
                 mainHandler.post(() -> listener.onResponse("ERROR: " + e.getMessage()));
             }
+        });
+    }
+    private void resolvePlaceCoordinates(String response, OnAIResponseListener listener) {
+        Pattern placePattern = Pattern.compile("\\[place:([^\\]]+)\\]");
+        Matcher matcher = placePattern.matcher(response);
+        List<String> placeNames = new ArrayList<>();
+        while (matcher.find()) {
+            placeNames.add(matcher.group(1).trim());
+        }
+
+        if (placeNames.isEmpty()) {
+            listener.onResponse(response);
+            return;
+        }
+
+        executor.execute(() -> {
+            StringBuilder result = new StringBuilder(response);
+            for (String placeName : placeNames) {
+                String original = "[place:" + placeName + "]";
+                try {
+                    String encoded = java.net.URLEncoder.encode(placeName, "UTF-8");
+                    String url = "https://nominatim.openstreetmap.org/search?q=" + encoded +
+                            "&format=json&limit=1&accept-language=ru,en";
+                    Request request = new Request.Builder()
+                            .url(url)
+                            .header("User-Agent", "OzTrip/1.0")
+                            .build();
+                    Response httpResponse = httpClient.newCall(request).execute();
+                    if (httpResponse.isSuccessful() && httpResponse.body() != null) {
+                        String body = httpResponse.body().string();
+                        JSONArray json = new JSONArray(body);
+                        if (json.length() > 0) {
+                            JSONObject place = json.getJSONObject(0);
+                            double lat = place.getDouble("lat");
+                            double lng = place.getDouble("lon");
+                            String coordStr = String.format(Locale.US, "[coord:%.5f,%.5f]%s", lat, lng, placeName);
+                            int idx = result.indexOf(original);
+                            if (idx != -1) {
+                                result.replace(idx, idx + original.length(), coordStr);
+                            }
+                            continue; // успешно заменили, переходим к следующему месту
+                        }
+                    }
+                    // Если геокодинг не дал результата – убираем [place:...] и оставляем просто название
+                    int idx = result.indexOf(original);
+                    if (idx != -1) {
+                        result.replace(idx, idx + original.length(), placeName);
+                    }
+                } catch (Exception e) {
+                    Log.e("AiFragment", "Geocoding error for " + placeName, e);
+                    // Аналогично убираем метку
+                    int idx = result.indexOf(original);
+                    if (idx != -1) {
+                        result.replace(idx, idx + original.length(), placeName);
+                    }
+                }
+            }
+            mainHandler.post(() -> listener.onResponse(result.toString()));
         });
     }
 
@@ -338,8 +402,10 @@ public class AiFragment extends Fragment {
                     JSONObject obj = new JSONObject(respBody);
                     String text = obj.getJSONArray("choices").getJSONObject(0)
                             .getJSONObject("message").getString("content");
-                    String finalText = processActions(text);
-                    mainHandler.post(() -> listener.onResponse(finalText));
+                    String processed = processActions(text);
+                    resolvePlaceCoordinates(processed, resolvedText -> {
+                        mainHandler.post(() -> listener.onResponse(resolvedText));
+                    });
                 } else {
                     mainHandler.post(() -> listener.onResponse("ERROR: OR " + respBody));
                 }

@@ -119,4 +119,16 @@
         <item name="android:colorBackground">@android:color/transparent</item>
     </style>
 
+    <style name="DotActive">
+        <item name="android:layout_width">10dp</item>
+        <item name="android:layout_height">10dp</item>
+        <item name="android:layout_margin">6dp</item>
+        <item name="android:background">@drawable/dot_active</item>
+    </style>
+    <style name="DotInactive">
+        <item name="android:layout_width">8dp</item>
+        <item name="android:layout_height">8dp</item>
+        <item name="android:layout_margin">6dp</item>
+        <item name="android:background">@drawable/dot_inactive</item>
+    </style>
 </resources>

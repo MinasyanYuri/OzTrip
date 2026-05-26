@@ -1,14 +1,17 @@
 package com.example.oztrip;
 
 import android.graphics.Color;
+import android.text.Layout;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.method.LinkMovementMethod;
 import android.text.style.ClickableSpan;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -57,7 +60,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         ChatMessage msg = messages.get(position);
 
         if (!msg.isUser) {
-            // Сообщение от бота – ищем координатные ссылки
+            // Сообщение от бота – делаем координаты кликабельными
             SpannableString spannable = new SpannableString(msg.text);
             Pattern pattern = Pattern.compile("\\[coord:([^,\\]]+),([^,\\]]+)\\]");
             Matcher matcher = pattern.matcher(spannable);
@@ -87,24 +90,58 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
             }
 
             holder.textView.setText(spannable);
-            holder.textView.setMovementMethod(LinkMovementMethod.getInstance());
+            // Убираем LinkMovementMethod, чтобы выделение текста работало
+            // holder.textView.setMovementMethod(LinkMovementMethod.getInstance()); // УДАЛЯЕМ
+
+            // Включаем выделение текста
+            holder.textView.setTextIsSelectable(true);
+
+            // Обрабатываем клики по координатам вручную
+            holder.textView.setOnTouchListener((v, event) -> {
+                if (event.getAction() == MotionEvent.ACTION_UP) {
+                    TextView tv = (TextView) v;
+                    int x = (int) event.getX();
+                    int y = (int) event.getY();
+                    x -= tv.getTotalPaddingLeft();
+                    y -= tv.getTotalPaddingTop();
+                    x += tv.getScrollX();
+                    y += tv.getScrollY();
+
+                    Layout layout = tv.getLayout();
+                    int line = layout.getLineForVertical(y);
+                    int off = layout.getOffsetForHorizontal(line, x);
+
+                    ClickableSpan[] links = spannable.getSpans(off, off, ClickableSpan.class);
+                    if (links.length > 0) {
+                        links[0].onClick(tv);
+                        return true;
+                    }
+                }
+                return false; // даём стандартному обработчику работать
+            });
+
         } else {
             // Сообщение пользователя – обычный текст
             holder.textView.setText(msg.text);
+            holder.textView.setTextIsSelectable(true);
         }
 
-        // Внешний вид (цвет фона) оставляем как было
+// В ChatAdapter.onBindViewHolder после установки текста и спанна
+// Настройка выравнивания и фона
+        RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) holder.textView.getLayoutParams();
         if (msg.isUser) {
             holder.textView.setBackgroundResource(R.drawable.bg_message_user);
-            holder.textView.setTextColor(holder.itemView.getContext()
-                    .getResources().getColor(android.R.color.white));
-            ((ViewGroup.MarginLayoutParams) holder.textView.getLayoutParams())
-                    .setMargins(80, 0, 0, 0);
+            holder.textView.setTextColor(Color.WHITE);
+            params.removeRule(RelativeLayout.ALIGN_PARENT_START);
+            params.addRule(RelativeLayout.ALIGN_PARENT_END);
+            params.setMargins(100, 0, 8, 0);
         } else {
             holder.textView.setBackgroundResource(R.drawable.bg_message_bot);
-            ((ViewGroup.MarginLayoutParams) holder.textView.getLayoutParams())
-                    .setMargins(0, 0, 80, 0);
+            params.removeRule(RelativeLayout.ALIGN_PARENT_END);
+            params.addRule(RelativeLayout.ALIGN_PARENT_START);
+            params.setMargins(8, 0, 80, 0);
         }
+        holder.textView.setLayoutParams(params);
     }
 
     @Override

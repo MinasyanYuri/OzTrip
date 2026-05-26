@@ -295,5 +295,15 @@
     <string name="text_96">For example: I love trekking and trying local cuisine...</string>
     <string name="text_97">Clear</string>
     <string name="text_98">Save</string>
+    <string name="onboarding1">🔍 Find Places\nTap the magnifying glass to find a city, street, or specific location.</string>
+    <string name="onboarding2">📍 Map\nHold your finger anywhere to see information about the point.</string>
+    <string name="onboarding3">💾 Save Point\nAdds the marked location to your active trip.</string>
+    <string name="onboarding4">🧭 Compass\nRotates the map to face north.</string>
+    <string name="onboarding5">👁 Hide/Show Marker\nRemoves or returns the center marker.</string>
+    <string name="onboarding6">🏠 Last Point\nInstantly moves the map to the last point you opened.</string>
+    <string name="onboarding7">📍 My Location\nCenters the map on your Geolocation.</string>
+    <string name="onboarding8">🤖 AI Assistant\nSwitch to the AI ​​tab — a smart guide for your trips.</string>
+    <string name="OnBoarding9">Skip</string>
+    <string name="OnBoarding10">Next</string>
 
 </resources>
