@@ -630,7 +630,7 @@
         android:visibility="gone"
         android:elevation="0dp" />
     <!-- Переключатель вкладок (поверх всего) -->
-    <com.example.oztrip.LiquidSegmentedControl
+    <com.oztrip.armenia.LiquidSegmentedControl
         android:id="@+id/liquid_nav"
         android:layout_width="match_parent"
         android:layout_height="60dp"

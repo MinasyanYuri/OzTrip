@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.oztrip"
+    namespace = "com.oztrip.armenia"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.oztrip"
+        applicationId = "com.oztrip.armenia"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
