@@ -498,8 +498,7 @@ public class MainActivity extends BaseActivity {
             TooltipCompat.setTooltipText(fabTarget, "Последний объект");
             TooltipCompat.setTooltipText(fabAction, "Моё место");
 
-            // Запускаем пошаговое обучение
-            showStepByStepOnboarding();
+
         }
 
 

@@ -13,6 +13,7 @@ import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class StepByStepOnboarding {
@@ -46,13 +47,16 @@ public class StepByStepOnboarding {
     }
 
     private void showStep(int index) {
+        // 1. Закрываем предыдущий попап и убираем подсветку
         dismissPopupAndHighlight();
 
+        // 2. Проверяем, не закончились ли шаги
         if (index >= steps.size()) {
             finishOnboarding();
             return;
         }
 
+        // 3. Получаем текущий шаг
         Step step = steps.get(index);
         View targetView = rootView.findViewById(step.viewId);
         if (targetView == null) {
@@ -61,10 +65,12 @@ public class StepByStepOnboarding {
             return;
         }
 
+        // 4. Подсвечиваем view (сохраняем оригинальный фон)
         originalBackground = targetView.getBackground();
         currentHighlightedView = targetView;
         targetView.setBackgroundResource(R.drawable.onboarding_highlight);
 
+        // 5. Создаём подсказку
         LinearLayout tipLayout = (LinearLayout) LayoutInflater.from(context)
                 .inflate(R.layout.onboarding_tip, null);
         TextView tipText = tipLayout.findViewById(R.id.tipText);
@@ -86,6 +92,7 @@ public class StepByStepOnboarding {
         popupWindow.setOutsideTouchable(false);
         popupWindow.setElevation(24);
 
+        // 6. Позиционируем и показываем
         targetView.post(() -> {
             tipLayout.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
             int tipWidth = tipLayout.getMeasuredWidth();
@@ -126,6 +133,5 @@ public class StepByStepOnboarding {
 
     private void finishOnboarding() {
         dismissPopupAndHighlight();
-        // Флаг НЕ сохраняется, поэтому при следующем запуске обучение появится снова
     }
 }
