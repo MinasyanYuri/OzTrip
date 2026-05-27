@@ -368,6 +368,7 @@ public class MainActivity extends BaseActivity {
 
     // Метод, который содержит всю инициализацию (ранее всё было в onCreate)
     private void initializeApp() {
+        SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
         // ======== Добавляем AiFragment =========
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.aiContainer, new AiFragment())
@@ -478,7 +479,6 @@ public class MainActivity extends BaseActivity {
         loadTravelDataFromCloud();
         setupButtons();
 // Показываем обучение только при смене пользователя (или первом входе)
-        SharedPreferences prefs = getSharedPreferences("OzTripPrefs", MODE_PRIVATE);
         String currentUser = FirebaseAuth.getInstance().getCurrentUser() != null ?
                 FirebaseAuth.getInstance().getCurrentUser().getUid() : "guest";
         String lastOnboardingUser = prefs.getString("last_onboarding_user", "");
@@ -1412,85 +1412,87 @@ public class MainActivity extends BaseActivity {
                 String urlString = "https://nominatim.openstreetmap.org/reverse?format=json"
                         + "&lat=" + lat + "&lon=" + lon + "&zoom=18&addressdetails=1&accept-language=ru,en";
 
-                URL url = new URL(urlString);
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                con.setRequestProperty("User-Agent", "OzTrip_App");
+                OkHttpClient client = createTrustAllClient();
+                Request request = new Request.Builder()
+                        .url(urlString)
+                        .header("User-Agent", "OzTrip/1.0")
+                        .build();
 
-                BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-                StringBuilder res = new StringBuilder();
-                String line;
-                while ((line = in.readLine()) != null) res.append(line);
-                in.close();
+                Response response = client.newCall(request).execute();
+                if (!response.isSuccessful() || response.body() == null)
+                    throw new IOException("Reverse geocoding failed");
 
-                JSONObject result = new JSONObject(res.toString());
+                String body = response.body().string();
+                JSONObject result = new JSONObject(body);
                 String displayName = result.optString("display_name", getString(R.string.text_auto_127));
                 String shortName = displayName.split(",")[0];
-                String type = result.optString("type", "point"); // ТИП ТУТ
+                String type = result.optString("type", "point");
                 JSONObject geojson = result.optJSONObject("geojson");
 
                 runOnUiThread(() -> {
-                    // 1. Центрируем камеру
-                    // Замени строку в runOnUiThread внутри reverseSearch:
                     CameraPosition pos = new CameraPosition.Builder()
-                            .target(new LatLng(lat, lon))
-                            .zoom(15.5f) // Чуть ближе для деталей
-                            .tilt(0)    // Легкий наклон для 3D эффекта
-                            .build();
-
+                            .target(new LatLng(lat, lon)).zoom(15.5f).tilt(0).build();
                     mapLibre.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 1200);
 
-                    // 2. Определяем типы для карточки
                     String displayType = getString(R.string.text_auto_113);
-                    // Внутри reverseSearch -> runOnUiThread
                     JSONObject address = result.optJSONObject("address");
-                    String city = "";
-                    String country = "";
-
+                    String city = "", country = "";
                     if (address != null) {
-                        // Nominatim может называть город по-разному: city, town, village или suburb
-                        city = address.optString("city", address.optString("town", address.optString("village", address.optString("suburb", ""))));
+                        city = address.optString("city", address.optString("town",
+                                address.optString("village", address.optString("suburb", ""))));
                         country = address.optString("country", "");
                     }
-
-// Формируем строку для нижней плашки (txtFlora)
                     String locationInfo = country;
-                    if (!city.isEmpty()) {
-                        locationInfo = city + ", " + country;
-                    }
+                    if (!city.isEmpty()) locationInfo = city + ", " + country;
                     if (locationInfo.isEmpty()) locationInfo = getString(R.string.text_auto_128);
 
-
-                    // Вызываем карточку (передаем locationInfo в параметр floraType)
                     showPremiumCard(shortName, displayType, locationInfo.toUpperCase(), lat, lon);
-
-
-                    // 4. Рисуем границы, если есть
                     if (geojson != null) drawBoundary(geojson);
 
-                    // 5. УПРАВЛЕНИЕ УКАЗАТЕЛЕМ (Теперь внутри потока UI и после получения type)
                     mapLibre.getStyle(style -> {
-                        org.maplibre.android.style.layers.Layer mainLayer = style.getLayer("marker-layer");
-                        org.maplibre.android.style.layers.Layer shadowLayer = style.getLayer("marker-shadow");
-
+                        Layer mainLayer = style.getLayer("marker-layer");
+                        Layer shadowLayer = style.getLayer("marker-shadow");
                         if (mainLayer != null && shadowLayer != null) {
-                            if (type.matches(".*(administrative|suburb|district|city|town).*")) {
-                                // Если это территория — скрываем точку
-                                mainLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
-                                shadowLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE));
-                            } else {
-                                // Если это объект — показываем точку
-                                mainLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.VISIBLE));
-                                shadowLayer.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.VISIBLE));
-                            }
+                            boolean hide = type.matches(".*(administrative|suburb|district|city|town).*");
+                            mainLayer.setProperties(PropertyFactory.visibility(hide ? Property.NONE : Property.VISIBLE));
+                            shadowLayer.setProperties(PropertyFactory.visibility(hide ? Property.NONE : Property.VISIBLE));
                         }
                     });
                 });
-
             } catch (Exception e) {
-                e.printStackTrace();
-                runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_129), Toast.LENGTH_SHORT).show());
+                Log.e("ReverseSearch", "Ошибка", e);
+                runOnUiThread(() -> Toast.makeText(this, "Ошибка поиска", Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    // Добавьте этот вспомогательный метод в класс MainActivity (если ещё нет)
+    private OkHttpClient createTrustAllClient() {
+        try {
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                    new X509TrustManager() {
+                        @Override
+                        public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {}
+                        @Override
+                        public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {}
+                        @Override
+                        public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                            return new java.security.cert.X509Certificate[0];
+                        }
+                    }
+            };
+            SSLContext sslContext = SSLContext.getInstance("SSL");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+            return new OkHttpClient.Builder()
+                    .sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustAllCerts[0])
+                    .hostnameVerifier((hostname, session) -> true)
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(15, TimeUnit.SECONDS)
+                    .build();
+        } catch (Exception e) {
+            // fallback к обычному клиенту (если ошибка)
+            return okHttpClient;
+        }
     }
 
     private void setupButtons() {
@@ -1990,25 +1992,24 @@ public class MainActivity extends BaseActivity {
     private void searchLocation(String query) {
         new Thread(() -> {
             try {
-                // 1. Правильно кодируем запрос, чтобы пробелы не ломали URL
                 String encodedQuery = java.net.URLEncoder.encode(query, "UTF-8");
                 String urlString = "https://nominatim.openstreetmap.org/search?q=" + encodedQuery
                         + "&format=json&polygon_geojson=1&limit=1&accept-language=ru,en";
 
-                URL url = new URL(urlString);
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                // Используем trustAllClient (тот же, что для elevation)
+                OkHttpClient client = createTrustAllClient();
+                Request request = new Request.Builder()
+                        .url(urlString)
+                        .header("User-Agent", "OzTrip/1.0")
+                        .build();
 
-                // 2. Обязательные заголовки, чтобы сервер нас не заблокировал
-                con.setRequestProperty("User-Agent", "OzTrip_App");
-                con.setRequestProperty("Accept-Language", "ru,en");
+                Response response = client.newCall(request).execute();
+                if (!response.isSuccessful() || response.body() == null) {
+                    throw new IOException("Bad response");
+                }
 
-                BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-                StringBuilder res = new StringBuilder();
-                String line;
-                while ((line = in.readLine()) != null) res.append(line);
-                in.close();
-
-                JSONArray results = new JSONArray(res.toString());
+                String body = response.body().string();
+                JSONArray results = new JSONArray(body);
 
                 if (results.length() > 0) {
                     JSONObject place = results.getJSONObject(0);
@@ -2021,74 +2022,50 @@ public class MainActivity extends BaseActivity {
 
                     runOnUiThread(() -> {
                         isSearching = true;
-                        // Плавный полет к найденной цели
                         mapLibre.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lat, lon), 15), 2500,
-                                new org.maplibre.android.maps.MapLibreMap.CancelableCallback() { // ИСПОЛЬЗУЙ ЭТОТ ПУТЬ
+                                new MapLibreMap.CancelableCallback() {
                                     @Override
                                     public void onFinish() {
-                                        // Даем пользователю 2 секунды осмотреться, прежде чем магнит снова оживет
-                                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                                            isSearching = false;
-                                        }, 2000);
+                                        new Handler(Looper.getMainLooper()).postDelayed(() -> isSearching = false, 2000);
                                     }
-
                                     @Override
-                                    public void onCancel() {
-                                        isSearching = false;
-                                    }
+                                    public void onCancel() { isSearching = false; }
                                 });
 
                         if (geojson != null) drawBoundary(geojson);
 
-                        // Определяем тип места для карточки
                         String displayType = getString(R.string.text_auto_149);
-
                         if (type != null && !type.isEmpty()) {
                             String t = type.toLowerCase();
-
-                            // --- ЛОГИКА ДЛЯ ПОДЗАГОЛОВКА (displayType) ---
-                            if (t.matches(".*(city|town|administrative|suburb).*")) {
+                            if (t.matches(".*(city|town|administrative|suburb).*"))
                                 displayType = getString(R.string.text_auto_150);
-                            } else if (t.equals("village") || t.equals("hamlet")) {
+                            else if (t.equals("village") || t.equals("hamlet"))
                                 displayType = getString(R.string.text_auto_151);
-                            } else if (t.contains("park") || t.contains("forest") || t.contains("wood") || t.equals("garden")) {
+                            else if (t.contains("park") || t.contains("forest") || t.contains("wood") || t.equals("garden"))
                                 displayType = getString(R.string.text_auto_152);
-                            } else if (t.matches(".*(peak|mountain|volcano|hill).*")) {
+                            else if (t.matches(".*(peak|mountain|volcano|hill).*"))
                                 displayType = getString(R.string.text_auto_153);
-                            } else if (t.matches(".*(water|river|lake|reservoir|canal).*")) {
+                            else if (t.matches(".*(water|river|lake|reservoir|canal).*"))
                                 displayType = getString(R.string.text_auto_154);
-                            } else if (t.matches(".*(monastery|church|castle|fortress|ruins).*")) {
+                            else if (t.matches(".*(monastery|church|castle|fortress|ruins).*"))
                                 displayType = getString(R.string.text_auto_155);
-                            }
-
-
-
                         }
-                        // Внутри searchLocation -> runOnUiThread
+
                         String[] parts = fullDisplayName.split(",");
-                        String countryCity = "";
-
-                        if (parts.length >= 2) {
-                            // Берем последние два элемента (обычно это Город и Страна)
-                            String last1 = parts[parts.length - 1].trim(); // Страна
-                            String last2 = parts[parts.length - 2].trim(); // Город / Область
-                            countryCity = last2 + ", " + last1;
-                        } else {
-                            countryCity = fullDisplayName;
-                        }
+                        String countryCity = parts.length >= 2
+                                ? parts[parts.length - 2].trim() + ", " + parts[parts.length - 1].trim()
+                                : fullDisplayName;
 
                         showPremiumCard(shortName, displayType, countryCity.toUpperCase(), lat, lon);
-
                     });
                 } else {
-                    runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_156), Toast.LENGTH_SHORT).show());
+                    runOnUiThread(() -> Toast.makeText(this, "Ничего не найдено", Toast.LENGTH_SHORT).show());
                 }
             } catch (Exception e) {
-                e.printStackTrace();
-                runOnUiThread(() -> Toast.makeText(this, getString(R.string.text_auto_157), Toast.LENGTH_SHORT).show());
+                Log.e("Search", "Ошибка поиска", e);
+                runOnUiThread(() -> Toast.makeText(this, "Ошибка сети: проверьте интернет", Toast.LENGTH_SHORT).show());
             }
         }).start();
-
     }
 
     private void showPremiumCard(String name, String subtitle, String type, double lat, double lon) {
