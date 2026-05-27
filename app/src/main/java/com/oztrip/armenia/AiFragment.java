@@ -533,6 +533,7 @@ public class AiFragment extends Fragment {
                 }
             }
         } catch (Exception e) {
+
             Log.e("LocationIQ", "Global search error", e);
         }
         return null;
