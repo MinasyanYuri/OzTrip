@@ -17,6 +17,10 @@ public class TravelRepository {
     }
 
     public void loadAllLists(OnDataLoadedListener listener) {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            listener.onError("User not signed in");
+            return;
+        }
         String userId = getUserId();
         if (userId == null) {
             if (listener != null) listener.onError("Not signed in");
@@ -37,6 +41,10 @@ public class TravelRepository {
     }
 
     public void saveAllLists(List<TravelList> lists, OnSaveListener listener) {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            listener.onError("User not signed in");
+            return;
+        }
         String userId = getUserId();
         if (userId == null) {
             if (listener != null) listener.onError("Not signed in");

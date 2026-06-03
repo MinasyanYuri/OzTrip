@@ -465,9 +465,18 @@ public class MainActivity extends BaseActivity {
         mapView = findViewById(R.id.mapView);
         if (mapView != null) mapView.onCreate(savedState);
 
-        FirebaseAuth auth = FirebaseAuth.getInstance();
         boolean isGuest = getSharedPreferences("OzTripPrefs", MODE_PRIVATE)
                 .getBoolean("guest_mode", false);
+
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        auth.addAuthStateListener(firebaseAuth -> {
+            if (firebaseAuth.getCurrentUser() == null && !isGuest) {
+                Intent intent = new Intent(MainActivity.this, RegisterActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(intent);
+                finishAffinity();
+            }
+        });
         if (auth.getCurrentUser() == null && !isGuest) {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
